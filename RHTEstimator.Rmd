@@ -26,18 +26,20 @@ df_r <- plm.data(df_r, index = c("id", "t"))
 
 
 
+
+   
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.linear_model import LogisticRegression
 
-def plot_feature_analysis_updated(X, y, feature_name, nbins=10):
+def plot_feature_analysis_dual_log_odds(X, y, feature_name, nbins=10):
     """
-    Plots log-odds vs. feature values along with feature distribution plots.
+    Plots log-odds vs. feature values with **dual y-axes** (Actual vs. Predicted Log-Odds).
 
     Includes:
-        1. Log-Odds Plot (Actual vs. Predicted) - Now exactly follows the logic in the image
+        1. Log-Odds Plot (Actual vs. Predicted) with **dual y-axes**
         2. Box Plot of the Feature
         3. Violin Plot of the Feature
         4. Density Plot (KDE) of the Feature
@@ -112,14 +114,29 @@ def plot_feature_analysis_updated(X, y, feature_name, nbins=10):
     # Create a 2x2 plot grid
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
-    # 🔹 1. Log-Odds Plot (Top-Left) - **Modified as per image logic**
-    axes[0, 0].scatter(plot_data['Feature'], plot_data['Actual'], color='blue', label="Actual Log-Odds", alpha=0.7)
-    axes[0, 0].plot(plot_data['Feature'], plot_data['Predicted'], color='goldenrod', linewidth=2, label="Predicted Log-Odds")
-    axes[0, 0].set_xlabel(feature_name)
-    axes[0, 0].set_ylabel("Log Odds")
-    axes[0, 0].set_title(f"Log-Odds vs. {feature_name}")
-    axes[0, 0].legend()
-    axes[0, 0].grid(True)
+    # 🔹 1. Log-Odds Plot with **Dual Y-Axes** (Top-Left)
+    ax1 = axes[0, 0]
+    ax2 = ax1.twinx()  # Create a second y-axis
+
+    # Scatter plot for actual log-odds
+    ax1.scatter(plot_data['Feature'], plot_data['Actual'], color='blue', label="Actual", alpha=0.7)
+
+    # Line plot for predicted log-odds
+    ax2.plot(plot_data['Feature'], plot_data['Predicted'], color='goldenrod', linewidth=2, label="Predicted")
+
+    # Labels
+    ax1.set_xlabel(feature_name)
+    ax1.set_ylabel("Actual Log-Odds", color='blue')
+    ax2.set_ylabel("Predicted Log-Odds", color='goldenrod')
+
+    # Set Title & Grid
+    ax1.set_title(f"Log-Odds vs. {feature_name}")
+    ax1.grid(True)
+
+    # Combine Legends
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc="best")
 
     # 🔹 2. Box Plot (Top-Right) - **No Change**
     sns.boxplot(x=X.flatten(), ax=axes[0, 1], color="lightblue")
