@@ -32,20 +32,21 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from sklearn.linear_model import LogisticRegression
 
-def plot_feature_analysis(X, y, feature_name):
+def plot_feature_analysis_updated(X, y, feature_name, nbins=10):
     """
     Plots log-odds vs. feature values along with feature distribution plots.
-    
+
     Includes:
-        1. Log-Odds Plot (Actual vs. Predicted)
+        1. Log-Odds Plot (Actual vs. Predicted) - Now exactly follows the logic in the image
         2. Box Plot of the Feature
         3. Violin Plot of the Feature
         4. Density Plot (KDE) of the Feature
-    
+
     Parameters:
         X (pd.DataFrame or np.array): Single feature values
         y (pd.Series or np.array): Binary target values (0/1)
         feature_name (str): Name of the feature to display on x-axis
+        nbins (int): Number of bins to use for computing empirical log-odds
     """
 
     # Reshape if necessary
@@ -58,47 +59,79 @@ def plot_feature_analysis(X, y, feature_name):
     model = LogisticRegression(class_weight="balanced", solver="liblinear")
     model.fit(X, y)
 
-    # Get predicted log-odds
-    log_odds_pred = model.decision_function(X)
+    # Get predicted probabilities
+    pred_prob = model.predict_proba(X)[:, 1]  # Probabilities of class 1
 
-    # ✅ Fix: Ensure bin edges are unique to avoid ValueError
-    bins = np.unique(np.percentile(X, np.linspace(0, 100, 10)))  # Removes duplicate bin edges
+    # ✅ Exact Log-Odds Calculation (Matching the Image Logic)
+    df = pd.DataFrame({'Feature': X.flatten(), 'Target': y, 'Pred_Prob': pred_prob})
 
-    # Bin feature values to estimate actual log-odds
-    df_bin = pd.DataFrame({'Feature': X.flatten(), 'Target': y})
-    df_bin['Bins'] = pd.cut(df_bin['Feature'], bins=bins, include_lowest=True, duplicates='drop')
+    # Sorting values for correct binning
+    df = df.sort_values(by='Feature')
 
-    # Compute actual log-odds from empirical data
-    grouped = df_bin.groupby('Bins')['Target'].agg(['sum', 'count'])
-    grouped['Empirical Log-Odds'] = np.log((grouped['sum'] + 1) / (grouped['count'] - grouped['sum'] + 1))  # Avoid div by zero
+    # Compute bin spacing
+    spacing = round(len(df) / nbins)
+    start = 0
+    stop = spacing
 
-    # Midpoints of bins for plotting
-    bin_midpoints = [(interval.left + interval.right) / 2 for interval in grouped.index]
+    # Store results
+    log_odds_y = []
+    log_odds_x = []
+    avg_x_bin = []
+    
+    # Loop over bins to calculate empirical and predicted log-odds
+    for q in range(nbins):
+        if q == (nbins - 1):  # Last bin case
+            prob = df['Target'][start:].sum() / len(df['Target'][start:])
+            avg_pred_prob = df['Pred_Prob'][start:].mean()
+        else:
+            prob = df['Target'][start:stop].sum() / len(df['Target'][start:stop])
+            avg_pred_prob = df['Pred_Prob'][start:stop].mean()
+
+        log_odds_y.append(np.log(prob / (1 - prob)))  # Actual Log-Odds
+        avg_x_bin.append(df['Feature'][start:stop].mean())
+        log_odds_x.append(np.log(avg_pred_prob / (1 - avg_pred_prob)))  # Predicted Log-Odds
+
+        start += spacing
+        stop += spacing
+
+    # ✅ Remove inf values caused by extreme probabilities (0 or 1)
+    inf_index = (np.array(log_odds_y) == np.inf) | (np.array(log_odds_x) == np.inf) | \
+                (np.array(log_odds_y) == -np.inf) | (np.array(log_odds_x) == -np.inf)
+
+    log_odds_y = pd.Series(log_odds_y)[~inf_index]
+    log_odds_x = pd.Series(log_odds_x)[~inf_index]
+    avg_x_bin = pd.Series(avg_x_bin)[~inf_index]
+
+    # Prepare DataFrame for plotting
+    plot_data = pd.DataFrame({
+        'Actual': log_odds_y.values,
+        'Predicted': log_odds_x.values,
+        'Feature': avg_x_bin.values
+    })
 
     # Create a 2x2 plot grid
     fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
-    # 🔹 1. Log-Odds Plot (Top-Left)
-    axes[0, 0].scatter(bin_midpoints, grouped['Empirical Log-Odds'], color='blue', label="Actual Log-Odds", alpha=0.7)
-    sorted_indices = np.argsort(X.flatten())
-    axes[0, 0].plot(X.flatten()[sorted_indices], log_odds_pred[sorted_indices], color='goldenrod', linewidth=2, label="Predicted Log-Odds")
+    # 🔹 1. Log-Odds Plot (Top-Left) - **Modified as per image logic**
+    axes[0, 0].scatter(plot_data['Feature'], plot_data['Actual'], color='blue', label="Actual Log-Odds", alpha=0.7)
+    axes[0, 0].plot(plot_data['Feature'], plot_data['Predicted'], color='goldenrod', linewidth=2, label="Predicted Log-Odds")
     axes[0, 0].set_xlabel(feature_name)
     axes[0, 0].set_ylabel("Log Odds")
     axes[0, 0].set_title(f"Log-Odds vs. {feature_name}")
     axes[0, 0].legend()
     axes[0, 0].grid(True)
 
-    # 🔹 2. Box Plot (Top-Right)
+    # 🔹 2. Box Plot (Top-Right) - **No Change**
     sns.boxplot(x=X.flatten(), ax=axes[0, 1], color="lightblue")
     axes[0, 1].set_xlabel(feature_name)
     axes[0, 1].set_title(f"Box Plot of {feature_name}")
 
-    # 🔹 3. Violin Plot (Bottom-Left)
+    # 🔹 3. Violin Plot (Bottom-Left) - **No Change**
     sns.violinplot(x=X.flatten(), ax=axes[1, 0], color="lightcoral")
     axes[1, 0].set_xlabel(feature_name)
     axes[1, 0].set_title(f"Violin Plot of {feature_name}")
 
-    # 🔹 4. Density Plot (KDE) (Bottom-Right)
+    # 🔹 4. Density Plot (KDE) (Bottom-Right) - **No Change**
     sns.kdeplot(X.flatten(), ax=axes[1, 1], fill=True, color="green", alpha=0.5)
     axes[1, 1].set_xlabel(feature_name)
     axes[1, 1].set_title(f"Density Plot (KDE) of {feature_name}")
