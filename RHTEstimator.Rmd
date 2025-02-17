@@ -34,3 +34,61 @@ When you save the notebook, an HTML file containing the code and output will be 
 
 The preview shows you a rendered HTML copy of the contents of the editor. Consequently, unlike *Knit*, *Preview* does not run any R code chunks. Instead, the output of the chunk when it was last run in the editor is displayed.
 
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.linear_model import LogisticRegression
+from sklearn.utils.class_weight import compute_sample_weight
+
+def plot_log_odds(X, y, feature_name):
+    """
+    Plots actual vs. predicted log-odds for a single feature in logistic regression.
+    
+    Parameters:
+        X (pd.DataFrame or np.array): Single feature values
+        y (pd.Series or np.array): Binary target values (0/1)
+        feature_name (str): Name of the feature to display on x-axis
+    """
+
+    # Reshape if necessary
+    if isinstance(X, pd.DataFrame):
+        X = X[feature_name].values.reshape(-1, 1)
+    else:
+        X = X.reshape(-1, 1)
+
+    # Fit Logistic Regression Model
+    model = LogisticRegression(class_weight="balanced", solver="liblinear")
+    model.fit(X, y)
+
+    # Get predicted log-odds
+    log_odds_pred = model.decision_function(X)
+
+    # Bin feature values to estimate actual log-odds
+    bins = np.percentile(X, np.linspace(0, 100, 10))  # Define bins
+    df_bin = pd.DataFrame({'Feature': X.flatten(), 'Target': y})
+    df_bin['Bins'] = pd.cut(df_bin['Feature'], bins=bins, include_lowest=True)
+
+    # Compute actual log-odds from empirical data
+    grouped = df_bin.groupby('Bins')['Target'].agg(['sum', 'count'])
+    grouped['Empirical Log-Odds'] = np.log((grouped['sum'] + 1) / (grouped['count'] - grouped['sum'] + 1))  # Avoid div by zero
+
+    # Midpoints of bins for plotting
+    bin_midpoints = [(interval.left + interval.right) / 2 for interval in grouped.index]
+
+    # Create the plot
+    plt.figure(figsize=(8, 6))
+    
+    # Scatter plot for actual (empirical) log-odds
+    plt.scatter(bin_midpoints, grouped['Empirical Log-Odds'], color='blue', label="Actual Log-Odds", alpha=0.7)
+
+    # Line plot for predicted log-odds
+    sorted_indices = np.argsort(X.flatten())
+    plt.plot(X.flatten()[sorted_indices], log_odds_pred[sorted_indices], color='goldenrod', linewidth=2, label="Predicted Log-Odds")
+
+    # Formatting
+    plt.xlabel(feature_name)
+    plt.ylabel("Log Odds")
+    plt.title(f"Log-Odds vs. {feature_name}")
+    plt.legend()
+    plt.grid(True)
+    plt.show()
