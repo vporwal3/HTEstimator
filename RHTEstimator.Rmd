@@ -171,95 +171,12 @@ for train_idx, test_idx in gkf.split(X_scaled, y, groups):
 
 # Print Metrics
 for metric, value in metrics.items():
-    print(f"{metric}: {value:.4f}")
-
-
-#######
+    print(f"{metric}: {value:.#
 
 
 
 
 
-import os
-import datetime
-
-# Create a timestamped folder to store results
-timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-results_dir = f"run-{timestamp}"
-os.makedirs(results_dir, exist_ok=True)
-
-# Define the CSV file to store model metrics
-csv_filename = os.path.join(results_dir, "model_metrics.csv")
-
-# Initialize an empty list to store all model results
-all_model_results = []
-
-# ----- Evaluation -----
-model_counter = 1  # To generate unique model names
-
-for params in grid_search.cv_results_['params']:
-    # Set hyperparameters for the model
-    rf = RandomForestClassifier(random_state=42, class_weight="balanced", **params)
-
-    model_name = f"candidate_model_{model_counter}_{params['n_estimators']}_{params['max_depth']}_{params['min_samples_split']}_{params['min_samples_leaf']}"
-    model_counter += 1  # Increment model number
-
-    metrics = {"Model Name": model_name}
-
-    for train_idx, test_idx in gkf.split(X_scaled, y, groups):
-        X_train, X_test = X_scaled.iloc[train_idx], X_scaled.iloc[test_idx]
-        y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
-
-        # Over-Sampling
-        smote = SMOTE(random_state=42)
-        X_train_os, y_train_os = smote.fit_resample(X_train, y_train)
-
-        # Fit Model
-        rf.fit(X_train, y_train)
-        rf_os = rf.fit(X_train_os, y_train_os)
-
-        # Predictions & Probabilities
-        y_pred_train = rf.predict(X_train)
-        y_pred_test = rf.predict(X_test)
-        y_pred_train_os = rf_os.predict(X_train_os)
-
-        y_prob_train = rf.predict_proba(X_train)[:, 1]
-        y_prob_test = rf.predict_proba(X_test)[:, 1]
-        y_prob_train_os = rf_os.predict_proba(X_train_os)[:, 1]
-
-        # Compute AUC Scores
-        metrics["auc_train_os"] = roc_auc_score(y_train_os, y_prob_train_os)
-        metrics["auc_train"] = roc_auc_score(y_train, y_prob_train)
-        metrics["auc_test_os"] = roc_auc_score(y_test, y_prob_test)
-        metrics["auc_test"] = roc_auc_score(y_test, y_prob_test)
-
-        # Compute Precision & Recall
-        metrics["precision_train_os"] = precision_score(y_train_os, y_pred_train_os)
-        metrics["precision_train"] = precision_score(y_train, y_pred_train)
-        metrics["precision_test_os"] = precision_score(y_test, y_pred_test)
-        metrics["precision_test"] = precision_score(y_test, y_pred_test)
-
-        metrics["recall_train_os"] = recall_score(y_train_os, y_pred_train_os)
-        metrics["recall_train"] = recall_score(y_train, y_pred_train)
-        metrics["recall_test_os"] = recall_score(y_test, y_pred_test)
-        metrics["recall_test"] = recall_score(y_test, y_pred_test)
-
-        # Compute AIC & BIC
-        logit_model = Logit(y_train, add_constant(X_train)).fit(disp=0)
-        metrics["AIC"] = logit_model.aic
-        metrics["BIC"] = logit_model.bic
-
-        # Compute Precision @ Top 1% & Top 5%
-        def precision_at_top_k(y_true, y_prob, k):
-            top_k = int(len(y_true) * k)
-            sorted_indices = np.argsort(y_prob)[::-1]  # Sort by probability desc
-            top_k_labels = y_true.iloc[sorted_indices][:top_k]
-            return np.mean(top_k_labels)  # Precision = % of actual 1s in top K
-
-        metrics["precision_top5"] = precision_at_top_k(y_test, y_prob_test, 0.05)
-        metrics["precision_top1"] = precision_at_top_k(y_test, y_prob_test, 0.01)
-
-        break  # Only compute on the first split
 
     # Append results to list
     all_model_results.append(metrics)
@@ -268,6 +185,101 @@ for params in grid_search.cv_results_['params']:
 results_df = pd.DataFrame(all_model_results)
 
 # Save to CSV
+results_df.to_csv(csv_filename, index=False)
+
+print(f"Model results saved in {csv_filename}")
+
+
+##
+
+# Initialize a list to store results
+all_model_results = []
+model_counter = 1
+
+# Loop through all hyperparameter combinations
+for params in param_combinations:
+    n_estimators, max_depth, min_samples_split, min_samples_leaf = params
+
+    # Define model with current hyperparameters
+    rf = RandomForestClassifier(
+        n_estimators=n_estimators,
+        max_depth=max_depth,
+        min_samples_split=min_samples_split,
+        min_samples_leaf=min_samples_leaf,
+        random_state=42,
+        class_weight="balanced"
+    )
+
+    model_name = f"candidate_model_{model_counter}_{n_estimators}_{max_depth}_{min_samples_split}_{min_samples_leaf}"
+    model_counter += 1  # Increment model number
+
+    metrics = {"Model Name": model_name}
+
+    # Initialize lists to store CV results
+    auc_train_list, auc_test_list = [], []
+    precision_train_list, precision_test_list = [], []
+    recall_train_list, recall_test_list = [], []
+    aic_list, bic_list = [], []
+    precision_top5_list, precision_top1_list = [], []
+
+    # Run cross-validation over all splits
+    for train_idx, test_idx in gkf.split(X_scaled, y, groups):
+        X_train, X_test = X_scaled.iloc[train_idx], X_scaled.iloc[test_idx]
+        y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+
+        # Apply Over-Sampling using SMOTE
+        smote = SMOTE(random_state=42)
+        X_train_os, y_train_os = smote.fit_resample(X_train, y_train)
+
+        # Fit Model (Cross-Validation Step)
+        rf.fit(X_train, y_train)
+
+        # Predictions & Probabilities
+        y_prob_train = rf.predict_proba(X_train)[:, 1]
+        y_prob_test = rf.predict_proba(X_test)[:, 1]
+
+        # Compute Metrics for Each Fold
+        auc_train_list.append(roc_auc_score(y_train, y_prob_train))
+        auc_test_list.append(roc_auc_score(y_test, y_prob_test))
+
+        precision_train_list.append(precision_score(y_train, rf.predict(X_train)))
+        precision_test_list.append(precision_score(y_test, rf.predict(X_test)))
+
+        recall_train_list.append(recall_score(y_train, rf.predict(X_train)))
+        recall_test_list.append(recall_score(y_test, rf.predict(X_test)))
+
+        # Compute AIC & BIC for Each Fold
+        logit_model = Logit(y_train, add_constant(X_train)).fit(disp=0)
+        aic_list.append(logit_model.aic)
+        bic_list.append(logit_model.bic)
+
+        # Compute Precision @ Top 1% & Top 5%
+        def precision_at_top_k(y_true, y_prob, k):
+            top_k = int(len(y_true) * k)
+            sorted_indices = np.argsort(y_prob)[::-1]  # Sort by probability desc
+            top_k_labels = y_true.iloc[sorted_indices][:top_k]
+            return np.mean(top_k_labels)  # Precision = % of actual 1s in top K
+
+        precision_top5_list.append(precision_at_top_k(y_test, y_prob_test, 0.05))
+        precision_top1_list.append(precision_at_top_k(y_test, y_prob_test, 0.01))
+
+    # Store the averaged cross-validated metrics
+    metrics["auc_train"] = np.mean(auc_train_list)
+    metrics["auc_test"] = np.mean(auc_test_list)
+    metrics["precision_train"] = np.mean(precision_train_list)
+    metrics["precision_test"] = np.mean(precision_test_list)
+    metrics["recall_train"] = np.mean(recall_train_list)
+    metrics["recall_test"] = np.mean(recall_test_list)
+    metrics["AIC"] = np.mean(aic_list)
+    metrics["BIC"] = np.mean(bic_list)
+    metrics["precision_top5"] = np.mean(precision_top5_list)
+    metrics["precision_top1"] = np.mean(precision_top1_list)
+
+    # Append model results
+    all_model_results.append(metrics)
+
+# Convert results to DataFrame and save to CSV
+results_df = pd.DataFrame(all_model_results)
 results_df.to_csv(csv_filename, index=False)
 
 print(f"Model results saved in {csv_filename}")
