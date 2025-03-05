@@ -51,132 +51,124 @@ Function Output:
 The function should plot the relationship between the feature values and the log odds, providing a visual comparison of the model's predictions against the actual data, highlighting how well the model captures the underlying trend.
 
 
-   
-import numpy as np
+
+ 
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.linear_model import LogisticRegression
+import numpy as np
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GroupKFold, GridSearchCV
+from imblearn.over_sampling import SMOTE
+from sklearn.metrics import roc_auc_score, precision_score, recall_score
+from sklearn.preprocessing import StandardScaler
+from statsmodels.api import Logit, add_constant
+from statsmodels.stats.outliers_influence import variance_inflation_factor
 
-def plot_feature_analysis_dual_log_odds(X, y, feature_name, nbins=10):
-    """
-    Plots log-odds vs. feature values with **dual y-axes** (Actual vs. Predicted Log-Odds).
+# Load Data
+file_path = "your_data.csv"  # Change this to your CSV file path
+df = pd.read_csv(file_path)
 
-    Includes:
-        1. Log-Odds Plot (Actual vs. Predicted) with **dual y-axes**
-        2. Box Plot of the Feature
-        3. Violin Plot of the Feature
-        4. Density Plot (KDE) of the Feature
+# Define target and features
+target_col = "delq"  # Change to your actual target column name
+group_col = "MDM_ID"  # Change to the obligor ID column
+feature_cols = [col for col in df.columns if col not in [target_col, group_col]]
 
-    Parameters:
-        X (pd.DataFrame or np.array): Single feature values
-        y (pd.Series or np.array): Binary target values (0/1)
-        feature_name (str): Name of the feature to display on x-axis
-        nbins (int): Number of bins to use for computing empirical log-odds
-    """
+X = df[feature_cols]
+y = df[target_col]
+groups = df[group_col]  # Obligors for GroupKFold
 
-    # Reshape if necessary
-    if isinstance(X, pd.DataFrame):
-        X = X[feature_name].values.reshape(-1, 1)
-    else:
-        X = X.reshape(-1, 1)
+# Handle missing values (fill with median)
+X.fillna(X.median(), inplace=True)
 
-    # Fit Logistic Regression Model
-    model = LogisticRegression(class_weight="balanced", solver="liblinear")
-    model.fit(X, y)
+# Standardize features (optional for RF but improves interpretability)
+scaler = StandardScaler()
+X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns)
 
-    # Get predicted probabilities
-    pred_prob = model.predict_proba(X)[:, 1]  # Probabilities of class 1
+# ----- VIF Calculation -----
+X_const = add_constant(X_scaled)
+vif = pd.DataFrame()
+vif["Feature"] = X_const.columns
+vif["VIF"] = [variance_inflation_factor(X_const.values, i) for i in range(X_const.shape[1])]
+vif = vif[vif["Feature"] != "const"]  # Exclude constant term
+print("Variance Inflation Factor (VIF):")
+print(vif)
 
-    # ✅ Exact Log-Odds Calculation (Matching the Image Logic)
-    df = pd.DataFrame({'Feature': X.flatten(), 'Target': y, 'Pred_Prob': pred_prob})
+# ----- GroupKFold for Cross Validation -----
+gkf = GroupKFold(n_splits=5)
 
-    # Sorting values for correct binning
-    df = df.sort_values(by='Feature')
+# Hyperparameter Grid
+param_grid = {
+    'n_estimators': [100, 300, 500],
+    'max_depth': [5, 10, 15],
+    'min_samples_split': [5, 10, 20],
+    'min_samples_leaf': [2, 5, 10]
+}
 
-    # Compute bin spacing
-    spacing = round(len(df) / nbins)
-    start = 0
-    stop = spacing
+rf = RandomForestClassifier(random_state=42, class_weight="balanced")
 
-    # Store results
-    log_odds_y = []
-    log_odds_x = []
-    avg_x_bin = []
+grid_search = GridSearchCV(rf, param_grid, scoring="roc_auc", cv=gkf.split(X_scaled, y, groups), n_jobs=-1, verbose=1)
+grid_search.fit(X_scaled, y)
+best_rf = grid_search.best_estimator_
+
+print(f"Best Parameters: {grid_search.best_params_}")
+
+# ----- Evaluation -----
+metrics = {}
+
+for train_idx, test_idx in gkf.split(X_scaled, y, groups):
+    X_train, X_test = X_scaled.iloc[train_idx], X_scaled.iloc[test_idx]
+    y_train, y_test = y.iloc[train_idx], y.iloc[test_idx]
+
+    # Over-Sampling
+    smote = SMOTE(random_state=42)
+    X_train_os, y_train_os = smote.fit_resample(X_train, y_train)
+
+    # Fit Model
+    best_rf.fit(X_train, y_train)
+    best_rf_os = best_rf.fit(X_train_os, y_train_os)
+
+    # Predictions & Probabilities
+    y_pred_train = best_rf.predict(X_train)
+    y_pred_test = best_rf.predict(X_test)
+    y_pred_train_os = best_rf_os.predict(X_train_os)
     
-    # Loop over bins to calculate empirical and predicted log-odds
-    for q in range(nbins):
-        if q == (nbins - 1):  # Last bin case
-            prob = df['Target'][start:].sum() / len(df['Target'][start:])
-            avg_pred_prob = df['Pred_Prob'][start:].mean()
-        else:
-            prob = df['Target'][start:stop].sum() / len(df['Target'][start:stop])
-            avg_pred_prob = df['Pred_Prob'][start:stop].mean()
+    y_prob_train = best_rf.predict_proba(X_train)[:, 1]
+    y_prob_test = best_rf.predict_proba(X_test)[:, 1]
+    y_prob_train_os = best_rf_os.predict_proba(X_train_os)[:, 1]
 
-        log_odds_y.append(np.log(prob / (1 - prob)))  # Actual Log-Odds
-        avg_x_bin.append(df['Feature'][start:stop].mean())
-        log_odds_x.append(np.log(avg_pred_prob / (1 - avg_pred_prob)))  # Predicted Log-Odds
+    # Compute AUC Scores
+    metrics["auc_train_os"] = roc_auc_score(y_train_os, y_prob_train_os)
+    metrics["auc_train"] = roc_auc_score(y_train, y_prob_train)
+    metrics["auc_test_os"] = roc_auc_score(y_test, y_prob_test)
+    metrics["auc_test"] = roc_auc_score(y_test, y_prob_test)
 
-        start += spacing
-        stop += spacing
+    # Compute Precision & Recall
+    metrics["precision_train_os"] = precision_score(y_train_os, y_pred_train_os)
+    metrics["precision_train"] = precision_score(y_train, y_pred_train)
+    metrics["precision_test_os"] = precision_score(y_test, y_pred_test)
+    metrics["precision_test"] = precision_score(y_test, y_pred_test)
 
-    # ✅ Remove inf values caused by extreme probabilities (0 or 1)
-    inf_index = (np.array(log_odds_y) == np.inf) | (np.array(log_odds_x) == np.inf) | \
-                (np.array(log_odds_y) == -np.inf) | (np.array(log_odds_x) == -np.inf)
+    metrics["recall_train_os"] = recall_score(y_train_os, y_pred_train_os)
+    metrics["recall_train"] = recall_score(y_train, y_pred_train)
+    metrics["recall_test_os"] = recall_score(y_test, y_pred_test)
+    metrics["recall_test"] = recall_score(y_test, y_pred_test)
 
-    log_odds_y = pd.Series(log_odds_y)[~inf_index]
-    log_odds_x = pd.Series(log_odds_x)[~inf_index]
-    avg_x_bin = pd.Series(avg_x_bin)[~inf_index]
+    # Compute AIC & BIC
+    logit_model = Logit(y_train, add_constant(X_train)).fit(disp=0)
+    metrics["AIC"] = logit_model.aic
+    metrics["BIC"] = logit_model.bic
 
-    # Prepare DataFrame for plotting
-    plot_data = pd.DataFrame({
-        'Actual': log_odds_y.values,
-        'Predicted': log_odds_x.values,
-        'Feature': avg_x_bin.values
-    })
+    # Compute Precision @ Top 1% & Top 5%
+    def precision_at_top_k(y_true, y_prob, k):
+        top_k = int(len(y_true) * k)
+        sorted_indices = np.argsort(y_prob)[::-1]  # Sort by probability desc
+        top_k_labels = y_true.iloc[sorted_indices][:top_k]
+        return np.mean(top_k_labels)  # Precision = % of actual 1s in top K
 
-    # Create a 2x2 plot grid
-    fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+    metrics["precision_top5"] = precision_at_top_k(y_test, y_prob_test, 0.05)
+    metrics["precision_top1"] = precision_at_top_k(y_test, y_prob_test, 0.01)
 
-    # 🔹 1. Log-Odds Plot with **Dual Y-Axes** (Top-Left)
-    ax1 = axes[0, 0]
-    ax2 = ax1.twinx()  # Create a second y-axis
+    break  # Only compute on the first split
 
-    # Scatter plot for actual log-odds
-    ax1.scatter(plot_data['Feature'], plot_data['Actual'], color='blue', label="Actual", alpha=0.7)
-
-    # Line plot for predicted log-odds
-    ax2.plot(plot_data['Feature'], plot_data['Predicted'], color='goldenrod', linewidth=2, label="Predicted")
-
-    # Labels
-    ax1.set_xlabel(feature_name)
-    ax1.set_ylabel("Actual Log-Odds", color='blue')
-    ax2.set_ylabel("Predicted Log-Odds", color='goldenrod')
-
-    # Set Title & Grid
-    ax1.set_title(f"Log-Odds vs. {feature_name}")
-    ax1.grid(True)
-
-    # Combine Legends
-    lines1, labels1 = ax1.get_legend_handles_labels()
-    lines2, labels2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines1 + lines2, labels1 + labels2, loc="best")
-
-    # 🔹 2. Box Plot (Top-Right) - **No Change**
-    sns.boxplot(x=X.flatten(), ax=axes[0, 1], color="lightblue")
-    axes[0, 1].set_xlabel(feature_name)
-    axes[0, 1].set_title(f"Box Plot of {feature_name}")
-
-    # 🔹 3. Violin Plot (Bottom-Left) - **No Change**
-    sns.violinplot(x=X.flatten(), ax=axes[1, 0], color="lightcoral")
-    axes[1, 0].set_xlabel(feature_name)
-    axes[1, 0].set_title(f"Violin Plot of {feature_name}")
-
-    # 🔹 4. Density Plot (KDE) (Bottom-Right) - **No Change**
-    sns.kdeplot(X.flatten(), ax=axes[1, 1], fill=True, color="green", alpha=0.5)
-    axes[1, 1].set_xlabel(feature_name)
-    axes[1, 1].set_title(f"Density Plot (KDE) of {feature_name}")
-
-    # ✅ Adjust layout
-    plt.tight_layout()
-    plt.show()
+# Print Metrics
+for metric, value in metrics.items():
+    print(f"{metric}: {value:.4f}")
