@@ -235,9 +235,47 @@ gkf = GroupKFold(n_splits=5)
 
 
 
+import os
+import datetime
+import numpy as np
+import pandas as pd
+from itertools import product
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GroupKFold
+from imblearn.over_sampling import SMOTE
+from sklearn.metrics import roc_auc_score, precision_score, recall_score
+from statsmodels.api import Logit, add_constant
+
+# Define hyperparameter grid manually
+param_grid = {
+    'n_estimators': [100, 300, 500],
+    'max_depth': [5, 10, 15],
+    'min_samples_split': [5, 10, 20],
+    'min_samples_leaf': [2, 5, 10]
+}
+
+# Generate all possible hyperparameter combinations
+param_combinations = list(product(
+    param_grid['n_estimators'],
+    param_grid['max_depth'],
+    param_grid['min_samples_split'],
+    param_grid['min_samples_leaf']
+))
+
+# Create timestamped folder for results
+timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+results_dir = f"run-{timestamp}"
+os.makedirs(results_dir, exist_ok=True)
+
+# Define CSV file to store model metrics
+csv_filename = os.path.join(results_dir, "model_metrics.csv")
+
 # Initialize a list to store results
 all_model_results = []
 model_counter = 1
+
+# Set up GroupKFold
+gkf = GroupKFold(n_splits=5)
 
 # Loop through all hyperparameter combinations
 for params in param_combinations:
@@ -260,10 +298,14 @@ for params in param_combinations:
 
     # Initialize lists to store CV results
     auc_train_list, auc_test_list = [], []
+    auc_train_os_list, auc_test_os_list = [], []  # Oversampled AUC
     precision_train_list, precision_test_list = [], []
+    precision_train_os_list, precision_test_os_list = [], []  # Oversampled Precision
     recall_train_list, recall_test_list = [], []
+    recall_train_os_list, recall_test_os_list = [], []  # Oversampled Recall
     aic_list, bic_list = [], []
     precision_top5_list, precision_top1_list = [], []
+    precision_top5_os_list, precision_top1_os_list = [], []  # Oversampled Precision at Top %
 
     # Run cross-validation over all splits
     for train_idx, test_idx in gkf.split(X_scaled, y, groups):
@@ -274,14 +316,25 @@ for params in param_combinations:
         smote = SMOTE(random_state=42)
         X_train_os, y_train_os = smote.fit_resample(X_train, y_train)
 
-        # Fit Model (Cross-Validation Step)
+        # Fit Model on Original Data
         rf.fit(X_train, y_train)
-
-        # Predictions & Probabilities
         y_prob_train = rf.predict_proba(X_train)[:, 1]
         y_prob_test = rf.predict_proba(X_test)[:, 1]
 
-        # Compute Metrics for Each Fold
+        # Fit Model on Oversampled Data
+        rf_os = RandomForestClassifier(
+            n_estimators=n_estimators,
+            max_depth=max_depth,
+            min_samples_split=min_samples_split,
+            min_samples_leaf=min_samples_leaf,
+            random_state=42,
+            class_weight="balanced"
+        )
+        rf_os.fit(X_train_os, y_train_os)
+        y_prob_train_os = rf_os.predict_proba(X_train_os)[:, 1]
+        y_prob_test_os = rf_os.predict_proba(X_test)[:, 1]
+
+        # Compute Metrics for Each Fold (Original)
         auc_train_list.append(roc_auc_score(y_train, y_prob_train))
         auc_test_list.append(roc_auc_score(y_test, y_prob_test))
 
@@ -291,12 +344,22 @@ for params in param_combinations:
         recall_train_list.append(recall_score(y_train, rf.predict(X_train)))
         recall_test_list.append(recall_score(y_test, rf.predict(X_test)))
 
-        # Compute AIC & BIC for Each Fold
+        # Compute Metrics for Each Fold (Oversampled)
+        auc_train_os_list.append(roc_auc_score(y_train_os, y_prob_train_os))
+        auc_test_os_list.append(roc_auc_score(y_test, y_prob_test_os))
+
+        precision_train_os_list.append(precision_score(y_train_os, rf_os.predict(X_train_os)))
+        precision_test_os_list.append(precision_score(y_test, rf_os.predict(X_test)))
+
+        recall_train_os_list.append(recall_score(y_train_os, rf_os.predict(X_train_os)))
+        recall_test_os_list.append(recall_score(y_test, rf_os.predict(X_test)))
+
+        # Compute AIC & BIC for Each Fold (Using Logistic Regression for Comparison)
         logit_model = Logit(y_train, add_constant(X_train)).fit(disp=0)
         aic_list.append(logit_model.aic)
         bic_list.append(logit_model.bic)
 
-        # Compute Precision @ Top 1% & Top 5%
+        # Compute Precision @ Top 1% & Top 5% (Original)
         def precision_at_top_k(y_true, y_prob, k):
             top_k = int(len(y_true) * k)
             sorted_indices = np.argsort(y_prob)[::-1]  # Sort by probability desc
@@ -306,23 +369,24 @@ for params in param_combinations:
         precision_top5_list.append(precision_at_top_k(y_test, y_prob_test, 0.05))
         precision_top1_list.append(precision_at_top_k(y_test, y_prob_test, 0.01))
 
+        # Compute Precision @ Top 1% & Top 5% (Oversampled)
+        precision_top5_os_list.append(precision_at_top_k(y_test, y_prob_test_os, 0.05))
+        precision_top1_os_list.append(precision_at_top_k(y_test, y_prob_test_os, 0.01))
+
     # Store the averaged cross-validated metrics
     metrics["auc_train"] = np.mean(auc_train_list)
     metrics["auc_test"] = np.mean(auc_test_list)
+    metrics["auc_train_os"] = np.mean(auc_train_os_list)
+    metrics["auc_test_os"] = np.mean(auc_test_os_list)
+
     metrics["precision_train"] = np.mean(precision_train_list)
     metrics["precision_test"] = np.mean(precision_test_list)
+    metrics["precision_train_os"] = np.mean(precision_train_os_list)
+    metrics["precision_test_os"] = np.mean(precision_test_os_list)
+
     metrics["recall_train"] = np.mean(recall_train_list)
     metrics["recall_test"] = np.mean(recall_test_list)
-    metrics["AIC"] = np.mean(aic_list)
-    metrics["BIC"] = np.mean(bic_list)
-    metrics["precision_top5"] = np.mean(precision_top5_list)
-    metrics["precision_top1"] = np.mean(precision_top1_list)
+    metrics["recall_train_os"] = np.mean(recall_train​⬤
 
-    # Append model results
-    all_model_results.append(metrics)
 
-# Convert results to DataFrame and save to CSV
-results_df = pd.DataFrame(all_model_results)
-results_df.to_csv(csv_filename, index=False)
 
-print(f"Model results saved in {csv_filename}")
