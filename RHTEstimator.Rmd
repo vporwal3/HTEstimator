@@ -192,6 +192,49 @@ print(f"Model results saved in {csv_filename}")
 
 ##
 
+import os
+import datetime
+import pandas as pd
+import numpy as np
+from itertools import product
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import GroupKFold
+from imblearn.over_sampling import SMOTE
+from sklearn.metrics import roc_auc_score, precision_score, recall_score
+from statsmodels.api import Logit, add_constant
+
+# Define hyperparameter grid manually
+param_grid = {
+    'n_estimators': [100, 300, 500],
+    'max_depth': [5, 10, 15],
+    'min_samples_split': [5, 10, 20],
+    'min_samples_leaf': [2, 5, 10]
+}
+
+# Generate all possible hyperparameter combinations
+param_combinations = list(product(
+    param_grid['n_estimators'],
+    param_grid['max_depth'],
+    param_grid['min_samples_split'],
+    param_grid['min_samples_leaf']
+))
+
+# Create timestamped folder for results
+timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+results_dir = f"run-{timestamp}"
+os.makedirs(results_dir, exist_ok=True)
+
+# Define CSV file to store model metrics
+csv_filename = os.path.join(results_dir, "model_metrics.csv")
+
+# Initialize a list to store results
+all_model_results = []
+
+# Set up GroupKFold
+gkf = GroupKFold(n_splits=5)
+
+
+
 # Initialize a list to store results
 all_model_results = []
 model_counter = 1
