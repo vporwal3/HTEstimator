@@ -51,6 +51,60 @@ Function Output:
 The function should plot the relationship between the feature values and the log odds, providing a visual comparison of the model's predictions against the actual data, highlighting how well the model captures the underlying 
 
 
+def calculate_information_value(bin_object, x_var):
+    """
+    Computes Information Value (IV) for a variable using WoE transformation.
+    """
+    try:
+        woe_summary = bin_object.woe_summary[[x_var, 'WoE_' + x_var, 'Good', 'Bad']]
+        
+        # Compute %Good and %Bad
+        woe_summary['%Good'] = woe_summary['Good'] / woe_summary['Good'].sum()
+        woe_summary['%Bad'] = woe_summary['Bad'] / woe_summary['Bad'].sum()
+        
+        # Compute IV
+        woe_summary['IV'] = (woe_summary['%Good'] - woe_summary['%Bad']) * woe_summary['WoE_' + x_var]
+        information_value = woe_summary['IV'].sum()
+
+        return information_value
+
+    except Exception as e:
+        print(f"⚠️ Could not calculate IV for {x_var}: {e}")
+        return None
+
+
+
+def process_variable(x_var, base):
+    y_var = 'TARGET'
+
+    bin_object = Binning(y_var, n_threshold=50, y_threshold=2, p_threshold=0.02, sign=False)
+
+    try:
+        bin_object.fit(base[[y_var, x_var]])
+        df_woe = bin_object.dataset
+        df_woe = df_woe.sort_values(x_var)
+
+        # Get WoE values
+        mapping = bin_object.woe_summary[[x_var, 'WoE_' + x_var]].sort_values(x_var, ignore_index=True)
+        df_woe = pd.merge_asof(df_woe, mapping, on=x_var, direction='forward')
+
+        # Compute Information Value (IV)
+        iv_value = calculate_information_value(bin_object, x_var)
+        print(f"✅ IV for {x_var}: {iv_value:.4f}")
+
+        return df_woe['WoE_' + x_var], x_var
+
+    except Exception as e:
+        print(f"Skipping {x_var} due to error: {e}")
+        return None, None
+
+
+
+
+
+
+
+
 import pandas as pd
 import multiprocessing
 from concurrent.futures import ThreadPoolExecutor
