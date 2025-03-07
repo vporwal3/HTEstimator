@@ -48,68 +48,75 @@ Handling Edge Cases:
 Ensure the function can handle cases where probabilities are very close to 0 or 1, which can result in infinite log odds, by removing or adjusting these values.
 Function Output:
 
-The function should plot the relationship between the feature values and the log odds, providing a visual comparison of the model's predictions against the actual data, highlighting how well the model captures the underlying trend.
+The function should plot the relationship between the feature values and the log odds, providing a visual comparison of the model's predictions against the actual data, highlighting how well the model captures the underlying 
 
 
-
- 
 import pandas as pd
-import numpy as np
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import GroupKFold, GridSearchCV
-from imblearn.over_sampling import SMOTE
-from sklearn.metrics import roc_auc_score, precision_score, recall_score
-from sklearn.preprocessing import StandardScaler
-from statsmodels.api import Logit, add_constant
-from statsmodels.stats.outliers_influence import variance_inflation_factor
+import multiprocessing
+from concurrent.futures import ThreadPoolExecutor
+from monotonic_binning.monotonic_woe_binning import Binning
 
-# Load Data
-file_path = "your_data.csv"  # Change this to your CSV file path
-df = pd.read_csv(file_path)
+base = pd.read_csv(model_file)
 
-# Define target and features
-target_col = "delq"  # Change to your actual target column name
-group_col = "MDM_ID"  # Change to the obligor ID column
-feature_cols = [col for col in df.columns if col not in [target_col, group_col]]
+def process_variable(x_var, base):
+    y_var = 'TARGET'  # Binary target for delinquency
 
-X = df[feature_cols]
-y = df[target_col]
-groups = df[group_col]  # Obligors for GroupKFold
+    bin_object = Binning(y_var, n_threshold=10, y_threshold=2, 
+                         p_threshold=0.02, max_n_bins=10, sign=False)
+    
+    try:
+        bin_object.fit(base[[y_var, x_var]])
+        df_woe = bin_object.dataset
+        df_woe = df_woe.sort_values(x_var)
+        idx = df_woe.index
+        
+        # Get WoE values
+        mapping = bin_object.woe_summary[[x_var, 'WoE_' + x_var]].sort_values(x_var, ignore_index=True)
+        df_woe = pd.merge_asof(df_woe, mapping, on=x_var, direction='forward')
+        df_woe.index = idx
+        df_woe = df_woe.sort_index()
 
-# Handle missing values (fill with median)
-X.fillna(X.median(), inplace=True)
+        # Debugging: Check number of bins
+        print(f"Variable: {x_var}")
+        print(f"Unique WoE values: {df_woe['WoE_' + x_var].nunique()}")
+        print(f"Bin counts: \n{df_woe['bins'].value_counts()}")
 
-# Standardize features (optional for RF but improves interpretability)
-scaler = StandardScaler()
-X_scaled = pd.DataFrame(scaler.fit_transform(X), columns=X.columns)
+        # If the variable collapsed into a single bin, check IV
+        if df_woe['WoE_' + x_var].nunique() == 1:
+            print(f"{x_var} collapsed into 1 bin. Possible low IV: {bin_object.information_value}")
 
-# ----- VIF Calculation -----
-X_const = add_constant(X_scaled)
-vif = pd.DataFrame()
-vif["Feature"] = X_const.columns
-vif["VIF"] = [variance_inflation_factor(X_const.values, i) for i in range(X_const.shape[1])]
-vif = vif[vif["Feature"] != "const"]  # Exclude constant term
-print("Variance Inflation Factor (VIF):")
-print(vif)
+        # Keep variables that are meaningful (not collapsed to 1 bin)
+        if not all(df_woe['WoE_' + x_var] == 0):
+            return df_woe['WoE_' + x_var], x_var
 
-# ----- GroupKFold for Cross Validation -----
-gkf = GroupKFold(n_splits=5)
+        return None, None
+    except Exception as e:
+        print(f"Skipping {x_var} due to error: {e}")
+        return None, None
 
-# Hyperparameter Grid
-param_grid = {
-    'n_estimators': [100, 300, 500],
-    'max_depth': [5, 10, 15],
-    'min_samples_split': [5, 10, 20],
-    'min_samples_leaf': [2, 5, 10]
-}
+# Parallel Processing
+woe_vars = []
+non_woe_vars = []
+num_cores = multiprocessing.cpu_count()
 
-rf = RandomForestClassifier(random_state=42, class_weight="balanced")
+with ThreadPoolExecutor(max_workers=num_cores) as executor:
+    futures = {executor.submit(process_variable, x_var, base): x_var for x_var in ret_vars}
+    
+    for future in futures:
+        try:
+            woe_series, x_var = future.result()
+            if woe_series is not None:
+                base['WoE_' + x_var] = woe_series
+                woe_vars.append(x_var)
+            else:
+                non_woe_vars.append(x_var)
+        except Exception as e:
+            print(f"Thread error: {e}")
 
-grid_search = GridSearchCV(rf, param_grid, scoring="roc_auc", cv=gkf.split(X_scaled, y, groups), n_jobs=-1, verbose=1)
-grid_search.fit(X_scaled, y)
-best_rf = grid_search.best_estimator_
 
-print(f"Best Parameters: {grid_search.best_params_}")
+
+
+
 
 # ----- Evaluation -----
 metrics = {}
