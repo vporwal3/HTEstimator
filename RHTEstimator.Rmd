@@ -1,26 +1,23 @@
-import pandas as pd
-import multiprocessing
-from concurrent.futures import ThreadPoolExecutor
-from optbinning import OptimalBinning
+import joblib  # To save/load models
 
 def process_variable(x_var, base):
     """
-    Performs optimal binning with WoE transformation using `optbinning`.
+    Trains and saves the binning model for a given variable.
     """
     y_var = 'TARGET'  # Binary target for delinquency
 
     try:
-        # Initialize binning object (auto-optimizes bins)
         opt_bin = OptimalBinning(name=x_var, dtype="numerical", solver="cp", monotonic_trend="auto")
-
-        # Fit binning model
         opt_bin.fit(base[x_var], base[y_var])
 
-        # Get WoE-transformed values
+        # Save the binning model
+        joblib.dump(opt_bin, f"binning_models/{x_var}_binning.pkl")
+
+        # Apply WoE transformation
         df_woe = pd.DataFrame({x_var: base[x_var]})
         df_woe['WoE_' + x_var] = opt_bin.transform(base[x_var], metric="woe")
 
-        # Compute Information Value (IV)
+        # Compute IV
         binning_table = opt_bin.binning_table_
         binning_summary = binning_table.build()
         iv_value = binning_summary.loc["Information value", "Value"]
@@ -32,36 +29,25 @@ def process_variable(x_var, base):
         print(f"Skipping {x_var} due to error: {e}")
         return None, None
 
-# Run binning in parallel
-woe_vars = []
-non_woe_vars = []
-num_cores = multiprocessing.cpu_count()
 
-with ThreadPoolExecutor(max_workers=num_cores) as executor:
-    futures = {executor.submit(process_variable, x_var, base): x_var for x_var in ret_vars}
-    
-    for future in futures:
+import joblib
+import pandas as pd
+
+def apply_woe_transform(new_data, feature_list):
+    """
+    Loads pre-trained binning models and applies WoE transformation on new unseen data.
+    """
+    for x_var in feature_list:
         try:
-            woe_series, x_var = future.result()
-            if woe_series is not None:
-                # Check if WoE column contains only zeros
-                if woe_series.nunique() == 1 and woe_series.unique()[0] == 0:
-                    print(f"⚠️ {x_var}: WoE has only zero values, keeping original feature.")
-                    non_woe_vars.append(x_var)  # Keep original feature
-                else:
-                    base['WoE_' + x_var] = woe_series  # Store WoE feature
-                    woe_vars.append("WoE_" + x_var)  # Keep only WoE feature
-            else:
-                non_woe_vars.append(x_var)  # Keep original if WoE is not valid
+            # Load the saved binning model
+            opt_bin = joblib.load(f"binning_models/{x_var}_binning.pkl")
 
+            # Apply WoE transformation
+            new_data["WoE_" + x_var] = opt_bin.transform(new_data[x_var], metric="woe")
+
+        except FileNotFoundError:
+            print(f"⚠️ Warning: No binning model found for {x_var}, skipping transformation.")
         except Exception as e:
-            print(f"Thread error: {e}")
+            print(f"⚠️ Error processing {x_var}: {e}")
 
-# **Create Final Feature List**
-final_feature_list = list(set(woe_vars + non_woe_vars))  # Ensure no duplicates
-
-# Save final features list to CSV
-features_iv_df = pd.DataFrame(final_feature_list, columns=["feature_name"])
-features_iv_df.to_csv("features_iv.csv", index=False)
-
-print("✅ Final feature list saved as `features_iv.csv`")
+    return new_data
