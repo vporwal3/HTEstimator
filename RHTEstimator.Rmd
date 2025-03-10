@@ -51,3 +51,18 @@ def apply_woe_transform(new_data, feature_list):
             print(f"⚠️ Error processing {x_var}: {e}")
 
     return new_data
+
+# Load test data
+new_data = pd.read_csv("new_data.csv")
+
+# Load feature list (only numeric features that were binned)
+feature_list = pd.read_csv("features_iv.csv")["feature_name"].tolist()
+
+# Apply WoE transformation
+new_data_transformed = apply_woe_transform(new_data, feature_list)
+
+# Save transformed test dataset
+new_data_transformed.to_csv("new_data_transformed.csv", index=False)
+
+print("✅ WoE transformation applied to new data and saved as `new_data_transformed.csv`")
+
