@@ -1,3 +1,7 @@
+
+df['flag'] = 0  # Default flag
+df.loc[df['column_name'].nlargest(int(0.01 * len(df))).index, 'flag'] = 1
+
 import joblib  # To save/load models
 
 def process_variable(x_var, base):
