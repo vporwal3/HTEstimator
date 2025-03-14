@@ -1,72 +1,47 @@
-
-df['flag'] = 0  # Default flag
-df.loc[df['column_name'].nlargest(int(0.01 * len(df))).index, 'flag'] = 1
-
-import joblib  # To save/load models
-
-def process_variable(x_var, base):
-    """
-    Trains and saves the binning model for a given variable.
-    """
-    y_var = 'TARGET'  # Binary target for delinquency
-
-    try:
-        opt_bin = OptimalBinning(name=x_var, dtype="numerical", solver="cp", monotonic_trend="auto")
-        opt_bin.fit(base[x_var], base[y_var])
-
-        # Save the binning model
-        joblib.dump(opt_bin, f"binning_models/{x_var}_binning.pkl")
-
-        # Apply WoE transformation
-        df_woe = pd.DataFrame({x_var: base[x_var]})
-        df_woe['WoE_' + x_var] = opt_bin.transform(base[x_var], metric="woe")
-
-        # Compute IV
-        binning_table = opt_bin.binning_table_
-        binning_summary = binning_table.build()
-        iv_value = binning_summary.loc["Information value", "Value"]
-        print(f"✅ IV for {x_var}: {iv_value:.4f}")
-
-        return df_woe['WoE_' + x_var], x_var
-
-    except Exception as e:
-        print(f"Skipping {x_var} due to error: {e}")
-        return None, None
-
-
-import joblib
 import pandas as pd
+from google.cloud import bigquery
+from google.oauth2 import service_account
 
-def apply_woe_transform(new_data, feature_list):
-    """
-    Loads pre-trained binning models and applies WoE transformation on new unseen data.
-    """
-    for x_var in feature_list:
-        try:
-            # Load the saved binning model
-            opt_bin = joblib.load(f"binning_models/{x_var}_binning.pkl")
+# Define your Google BigQuery credentials (Use your own JSON key file)
+credentials = service_account.Credentials.from_service_account_file("your_service_account.json")
 
-            # Apply WoE transformation
-            new_data["WoE_" + x_var] = opt_bin.transform(new_data[x_var], metric="woe")
+# Initialize BigQuery client
+client = bigquery.Client(credentials=credentials, project=credentials.project_id)
 
-        except FileNotFoundError:
-            print(f"⚠️ Warning: No binning model found for {x_var}, skipping transformation.")
-        except Exception as e:
-            print(f"⚠️ Error processing {x_var}: {e}")
+# Define the month-year pairs
+month_year_pairs = [
+    ("01", "2024"),  # January 2024
+    ("02", "2024"),  # February 2024
+    ("03", "2024")   # March 2024
+    # Add more as needed
+]
 
-    return new_data
+# Base SQL query with placeholders
+base_query = """
+SELECT * 
+FROM `your_project.your_dataset.your_table`
+WHERE month = '{month_placeholder}' AND year = '{year_placeholder}'
+"""
 
-# Load test data
-new_data = pd.read_csv("new_data.csv")
+# Initialize an empty DataFrame to store the final result
+final_df = pd.DataFrame()
 
-# Load feature list (only numeric features that were binned)
-feature_list = pd.read_csv("features_iv.csv")["feature_name"].tolist()
+# Loop through month-year pairs
+for month, year in month_year_pairs:
+    # Replace placeholders with actual month and year
+    query = base_query.replace("{month_placeholder}", month).replace("{year_placeholder}", year)
+    
+    # Run the query
+    df = client.query(query).to_dataframe()
 
-# Apply WoE transformation
-new_data_transformed = apply_woe_transform(new_data, feature_list)
+    # Print the shape of the current month's DataFrame
+    print(f"Shape of DataFrame for {month}-{year}: {df.shape}")
 
-# Save transformed test dataset
-new_data_transformed.to_csv("new_data_transformed.csv", index=False)
+    # Append the new data to final_df
+    final_df = pd.concat([final_df, df], ignore_index=True)
 
-print("✅ WoE transformation applied to new data and saved as `new_data_transformed.csv`")
+    # Print the cumulative DataFrame shape
+    print(f"Shape of cumulative DataFrame: {final_df.shape}")
 
+# Output final DataFrame shape
+print(f"Final DataFrame shape after all iterations: {final_df.shape}")
