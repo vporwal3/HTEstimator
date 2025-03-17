@@ -48,25 +48,5 @@ print(f"Final DataFrame shape after all iterations: {final_df.shape}")
 
 
 
-**we can projects 53 granular non-interest income and expense line items**  
-
-- **Quantitative models**  
-  - Recalibrate models by incorporating most recent data observations, and redevelop certain model using the Variable Selection Process.  
-  - Run quantitative models utilizing macroeconomic input, which produce projections in the various scenarios using the relationship between statistically significant & intuitive macroeconomic variables and a particular line item.  
-  - Consider the need for model overlay and implement, if necessary, to account for model weaknesses or recent / known changes to the respective line of business.  
-
-- **Management Estimates**  
-  - Line items are projected using a non-modeled / management estimate process when a model was attempted but not used after undergoing thorough review & testing and/or the line item has a known, logical relationship with an internal driver.  
-  - Results across scenarios are compared to ensure the projections between scenarios are appropriately differentiated and are logical given scenario conditions.  
-  - Projections are also evaluated against business drivers to ensure consistency between financial statements.  
-
-- Subject matter expert projections are those projections that have more involved projection methodologies and are integrated into the Non Interest projections. Line items include: **CRE Mortgage Servicing Rights Valuation, FDIC Expense and Operational RISK.**  
-
-- **Review and Challenge** is conducted at multiple levels of the organization and participants include:  
-  - LOB Subject Matter Experts  
-  - LOB CFO  
-  - Senior Management  
-
----
 
 
