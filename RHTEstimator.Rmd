@@ -1,52 +1,19 @@
+
+import numpy as np
 import pandas as pd
-from google.cloud import bigquery
-from google.oauth2 import service_account
+import statsmodels.api as sm
+from statsmodels.genmod.generalized_estimating_equations import GEE
+from statsmodels.genmod.families import Binomial
 
-# Define your Google BigQuery credentials (Use your own JSON key file)
-credentials = service_account.Credentials.from_service_account_file("your_service_account.json")
+# Sample Data (Assuming df has X, y, and a 'group' column)
+df = pd.read_csv("your_data.csv")  # Load your dataset
+X = df.drop(columns=["target", "group"])  # Features
+y = df["target"]  # Target variable
+groups = df["group"]  # Grouping variable for GEE
 
-# Initialize BigQuery client
-client = bigquery.Client(credentials=credentials, project=credentials.project_id)
+# Compute Class Weights (Inverse of class frequencies)
+class_counts = y.value_counts(normalize=True)
+weights = np.where(y == 1, 1/class_counts[1], 1/class_counts[0])  # Higher weight for minority class
 
-# Define the month-year pairs
-month_year_pairs = [
-    ("01", "2024"),  # January 2024
-    ("02", "2024"),  # February 2024
-    ("03", "2024")   # March 2024
-    # Add more as needed
-]
-
-# Base SQL query with placeholders
-base_query = """
-SELECT * 
-FROM `your_project.your_dataset.your_table`
-WHERE month = '{month_placeholder}' AND year = '{year_placeholder}'
-"""
-
-# Initialize an empty DataFrame to store the final result
-final_df = pd.DataFrame()
-
-# Loop through month-year pairs
-for month, year in month_year_pairs:
-    # Replace placeholders with actual month and year
-    query = base_query.replace("{month_placeholder}", month).replace("{year_placeholder}", year)
-    
-    # Run the query
-    df = client.query(query).to_dataframe()
-
-    # Print the shape of the current month's DataFrame
-    print(f"Shape of DataFrame for {month}-{year}: {df.shape}")
-
-    # Append the new data to final_df
-    final_df = pd.concat([final_df, df], ignore_index=True)
-
-    # Print the cumulative DataFrame shape
-    print(f"Shape of cumulative DataFrame: {final_df.shape}")
-
-# Output final DataFrame shape
-print(f"Final DataFrame shape after all iterations: {final_df.shape}")
-
-
-
-
-
+# Add Intercept for GEE
+X = sm.add_constant(X)
