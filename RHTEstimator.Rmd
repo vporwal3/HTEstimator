@@ -1,3 +1,118 @@
+# Import necessary libraries
+import pandas as pd
+import numpy as np
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+from scipy.optimize import minimize
+
+# Create synthetic dataset
+dates = pd.date_range(start="2020-06-30", end="2024-03-31", freq="M")
+np.random.seed(42)
+ff_target = np.linspace(0.25, 5.0, len(dates)) + np.random.normal(0, 0.1, len(dates))
+rate = 0.5 * ff_target + np.random.normal(0, 0.2, len(dates))
+
+df = pd.DataFrame({
+    'PRD_D': dates,
+    'FF_Target': ff_target,
+    'RATE': rate
+})
+
+# Calculate moving average of FF_Target based on a given window
+def calculate_ff_average(data, window):
+    return data['FF_Target'].rolling(window=window, min_periods=1).mean()
+
+# Generate forecasted rate using the formula
+def generate_forecast(data, slope, window, start_index):
+    ff_avg = calculate_ff_average(data, window)
+    forecasted_rates = [data.loc[start_index - 1, 'RATE']]
+    ff_avg_list = []
+
+    for t in range(start_index, len(data)):
+        prev_ff_avg = ff_avg.iloc[t - 1]
+        curr_ff_avg = ff_avg.iloc[t]
+        prev_forecast = forecasted_rates[-1]
+        ff_avg_list.append(curr_ff_avg)
+
+        if prev_ff_avg == 0 or curr_ff_avg == 0 or prev_forecast == 0:
+            forecasted_value = prev_forecast
+        else:
+            log_change = np.log(curr_ff_avg) - np.log(prev_ff_avg)
+            forecasted_value = np.exp(log_change * slope + np.log(prev_forecast))
+
+        forecasted_rates.append(forecasted_value)
+
+    forecast_df = data.iloc[start_index:].copy()
+    forecast_df['Forecast'] = forecasted_rates[1:]
+    forecast_df['FF_Avg'] = ff_avg_list
+    return forecast_df
+
+# Compute deposit beta (regression slope between forecast and FF average)
+def compute_deposit_beta(forecast_df):
+    x = forecast_df['FF_Avg'].values
+    y = forecast_df['Forecast'].values
+    if len(x) < 2 or np.all(x == x[0]):
+        return 0
+    x_mean = np.mean(x)
+    y_mean = np.mean(y)
+    numerator = np.sum((x - x_mean) * (y - y_mean))
+    denominator = np.sum((x - x_mean) ** 2)
+    return numerator / denominator if denominator != 0 else 0
+
+# Objective function to minimize (MAE between forecasted and actual rate)
+def optimize_mae(slope, data, window, start_index):
+    forecast_df = generate_forecast(data, slope[0], window, start_index)
+    mae = mean_absolute_error(forecast_df['RATE'], forecast_df['Forecast'])
+    return mae
+
+# Constraints to keep deposit beta within [0, 1]
+def deposit_beta_bounds(slope, data, window, start_index):
+    forecast_df = generate_forecast(data, slope[0], window, start_index)
+    beta = compute_deposit_beta(forecast_df)
+    return [beta, 1 - beta]
+
+# Forecast initialization
+start_date = pd.to_datetime("2022-02-28")
+start_index = df.index[df['PRD_D'] == start_date][0]
+initial_rate = df.loc[:start_index, 'RATE'].mean()
+df.at[start_index - 1, 'RATE'] = initial_rate
+
+# Run optimization for each window size
+results = []
+
+for window in range(1, 13):
+    constraints = ({
+        'type': 'ineq',
+        'fun': lambda s, df=df, window=window, start_index=start_index: deposit_beta_bounds(s, df, window, start_index)[0]
+    }, {
+        'type': 'ineq',
+        'fun': lambda s, df=df, window=window, start_index=start_index: deposit_beta_bounds(s, df, window, start_index)[1]
+    })
+
+    res = minimize(
+        optimize_mae, x0=[0.5],
+        args=(df, window, start_index),
+        constraints=constraints,
+        method='SLSQP'
+    )
+
+    best_slope = res.x[0]
+    forecast_df = generate_forecast(df, best_slope, window, start_index)
+    mae = mean_absolute_error(forecast_df['RATE'], forecast_df['Forecast'])
+    rmse = mean_squared_error(forecast_df['RATE'], forecast_df['Forecast'], squared=False)
+    beta = compute_deposit_beta(forecast_df)
+    results.append((window, best_slope, beta, mae, rmse))
+
+# Display final results
+results_df = pd.DataFrame(results, columns=['Window', 'Best Slope', 'Avg Deposit Beta', 'MAE', 'RMSE'])
+import ace_tools as tools; tools.display_dataframe_to_user(name="Forecast Optimization Results", dataframe=results_df)
+
+
+
+
+
+
+
+
+
 # Reimport necessary modules after error
 import pandas as pd
 import numpy as np
