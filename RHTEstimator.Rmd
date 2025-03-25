@@ -79,3 +79,89 @@ for window in range(1, 13):
 # Create results DataFrame
 results_df = pd.DataFrame(results, columns=['Window', 'Best Slope', 'MAE', 'RMSE'])
 import ace_tools as tools; tools.display_dataframe_to_user(name="Window Optimization Results", dataframe=results_df)
+
+
+
+
+
+# Re-import necessary packages after code execution state reset
+import pandas as pd
+import numpy as np
+from datetime import datetime
+from dateutil.relativedelta import relativedelta
+from sklearn.metrics import mean_absolute_error, mean_squared_error
+from scipy.optimize import minimize
+
+# 1. Create sample data from June 30, 2020 to March 31, 2024
+dates = pd.date_range(start="2020-06-30", end="2024-03-31", freq="M")
+np.random.seed(42)
+
+# Simulate FF Target with an upward trend
+ff_target = np.linspace(0.25, 5.0, len(dates)) + np.random.normal(0, 0.1, len(dates))
+
+# Simulate actual RATE with some lagged relationship to FF Target
+rate = 0.5 * ff_target + np.random.normal(0, 0.2, len(dates))
+
+# Create DataFrame
+df = pd.DataFrame({
+    'PRD_D': dates,
+    'FF_Target': ff_target,
+    'RATE': rate
+})
+
+# Define function to calculate FF average based on window
+def compute_ff_avg(data, window):
+    return data['FF_Target'].rolling(window=window, min_periods=1).mean()
+
+# Updated forecast function with corrected multiplicative formula
+def forecast_rate_corrected(df, slope, window, start_idx):
+    ff_avg = compute_ff_avg(df, window)
+    forecast = [df.loc[start_idx-1, 'RATE']]  # initial forecast is avg of past actuals
+
+    for t in range(start_idx, len(df)):
+        prev_ff_avg = ff_avg.iloc[t - 1]
+        curr_ff_avg = ff_avg.iloc[t]
+        prev_forecast = forecast[-1]
+
+        if prev_ff_avg == 0 or curr_ff_avg == 0 or prev_forecast == 0:
+            forecasted_value = prev_forecast  # hold value if division/log fails
+        else:
+            log_change = np.log(curr_ff_avg) - np.log(prev_ff_avg)
+            forecasted_value = np.exp(log_change * slope + np.log(prev_forecast))
+
+        forecast.append(forecasted_value)
+
+    df_forecast = df.iloc[start_idx:].copy()
+    df_forecast['Forecast'] = forecast[1:]
+    return df_forecast
+
+# Updated objective function with corrected forecast
+def objective_corrected(slope, df, window, start_idx):
+    df_forecast = forecast_rate_corrected(df, slope[0], window, start_idx)
+    mae = mean_absolute_error(df_forecast['RATE'], df_forecast['Forecast'])
+    return mae
+
+# Define the start index (February 2022 onwards)
+start_date = pd.to_datetime("2022-02-28")
+start_idx = df.index[df['PRD_D'] == start_date][0]
+
+# Initialize the initial forecast as avg of all actuals up to Feb 2022
+initial_forecast = df.loc[:start_idx, 'RATE'].mean()
+df.at[start_idx-1, 'RATE'] = initial_forecast  # overwrite RATE at start_idx-1 for initial seed
+
+# Rerun optimization for window sizes 1 to 12 with corrected forecast formula
+corrected_results = []
+
+for window in range(1, 13):
+    res = minimize(
+        objective_corrected, x0=[0.5], args=(df, window, start_idx),
+        bounds=[(0, 1)], method='L-BFGS-B'
+    )
+    best_slope = res.x[0]
+    df_forecast = forecast_rate_corrected(df, best_slope, window, start_idx)
+    mae = mean_absolute_error(df_forecast['RATE'], df_forecast['Forecast'])
+    rmse = mean_squared_error(df_forecast['RATE'], df_forecast['Forecast'], squared=False)
+    corrected_results.append((window, best_slope, mae, rmse))
+
+# Display updated results
+import ace_tools as tools; tools.display_dataframe_to_user(name="Corrected Forecast Results", dataframe=pd.DataFrame(corrected_results, columns=['Window', 'Best Slope', 'MAE', 'RMSE']))
