@@ -1,0 +1,38 @@
+<pre>
+```mermaid
+flowchart TD
+
+subgraph Bot_System [Bot System]
+    A1[Start] --> A2[Presence Check Bot scans client folder]
+    A2 --> A3[Creates Artifact with:<br/>• client_id<br/>• review elements found<br/>• file paths]
+    A3 --> A4[Stores Artifact in Object Storage]
+    A4 --> A5[Invokes LLM System API with client_id]
+end
+
+subgraph LLM_Evaluation [LLM Evaluation System]
+    B1[Artifact Reader loads metadata] --> B2[Extract review elements & file locations]
+
+    B2 --> C1[LexisNexis Agent<br/>(if file found)]
+    B2 --> C2[Web Search Agent<br/>(if file found)]
+    B2 --> C3[Other Agents...<br/>(e.g., Ownership Info, Media)]
+
+    C1 --> D1[JSON output:<br/>element, status, reason]
+    C2 --> D2
+    C3 --> D3
+
+    D1 & D2 & D3 --> E1[Final Evaluation Agent<br/>Overall decision]
+    E1 --> E2[Final outcome:<br/>Satisfactory or Rework<br/>+ reasoning]
+
+    D1 & D2 & D3 --> F1[Create Evaluation Artifact:<br/>agent outputs + final result]
+    E2 --> F1
+
+    F1 --> G1[Store Evaluation Artifact in Object Storage]
+    G1 --> G2[Send Status Code to Bot]
+end
+
+subgraph Post_Processing [Post-Processing]
+    G2 --> H1[Bot reads Evaluation Artifact]
+    H1 --> H2[Bot delivers report to next stage<br/>(e.g., UI, QA Dashboard)]
+end
+```
+</pre>
