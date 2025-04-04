@@ -1,3 +1,63 @@
+Topic,Explanation
+What does the model predict?,It predicts whether a client CDD report should be labeled “Rework Required” or “Satisfactory” based on the presence or absence of required review element (RE) files.
+What does the model use?,It uses:• Which review elements were required (based on client’s risk factors)• Which of those were actually found in the folder• Other metadata such as % missing or total required
+What will the model explain?,The model can explain why a report is flagged for rework using feature importance (e.g., “RE2 was required but missing” had high impact).
+Target variable (Label),Actual Review Rating from 1LOD or corrected 2LOD label: Satisfactory or Rework Required
+
+
+Required,Present,Actual Label,Interpretation
+1,1,Satisfactory,Correct outcome, compliant.
+1,0,Satisfactory,Red flag – bot or 1LOD likely missed a required file. Model will likely predict Rework Required.
+1,0,Rework Required,Good – aligns with expectations. Model should confirm this.
+0,1,Satisfactory,Extra file found – not required, but not a problem. Model may still predict satisfactory.
+0,1,Rework Required,Unexpected – investigate why rework was required if everything required was present and extra documents existed.
+1,1,Rework Required,Possibly correct – maybe the document was present but content was insufficient (outside scope of presence-only model).
+0,0,Satisfactory,Valid – nothing required, nothing found.
+0,0,Rework Required,Odd case – nothing was required, but still marked as rework. Could be manual override or other issue.
+
+Perfect! Based on your **Excel structure** and the goal of your model, here’s a clear **interpretation guide** you can add as a new section (either in the Excel file or as a slide/doc accompanying it).
+
+---
+
+## **Model Interpretation Guide (Add this as a block in Excel)**
+
+| **Topic**                  | **Explanation** |
+|----------------------------|------------------|
+| **What does the model predict?** | It predicts whether a client CDD report should be labeled **"Rework Required"** or **"Satisfactory"** based on the presence or absence of required review element (RE) files. |
+| **What does the model use?** | It uses:<br>• Which review elements were **required** (based on client's risk factors)<br>• Which of those were actually **found** in the folder<br>• Other metadata such as % missing or total required |
+| **What will the model explain?** | The model can explain **why** a report is flagged for rework using feature importance (e.g., “RE2 was required but missing” had high impact). |
+| **Target variable (Label)** | `Actual Review Rating` from 1LOD or corrected 2LOD label: **Satisfactory** or **Rework Required** |
+
+---
+
+## **Scenario Analysis: Possible Cases**
+
+| **Required** | **Present** | **Actual Label**     | **Interpretation**                                                                                                                                 |
+|--------------|-------------|----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
+| 1            | 1           | Satisfactory         | Correct outcome, compliant.                                                                                                                        |
+| 1            | 0           | Satisfactory         | **Red flag** – bot or 1LOD likely missed a required file. Model will likely predict **Rework Required**.                                           |
+| 1            | 0           | Rework Required      | Good – aligns with expectations. Model should confirm this.                                                                                        |
+| 0            | 1           | Satisfactory         | Extra file found – not required, but not a problem. Model may still predict satisfactory.                                                          |
+| 0            | 1           | Rework Required      | Unexpected – investigate why rework was required if everything required was present and extra documents existed.                                  |
+| 1            | 1           | Rework Required      | Possibly correct – maybe the document was present but **content was insufficient** (outside scope of presence-only model).                        |
+| 0            | 0           | Satisfactory         | Valid – nothing required, nothing found.                                                                                                           |
+| 0            | 0           | Rework Required      | Odd case – nothing was required, but still marked as rework. Could be manual override or other issue.                                             |
+
+---
+
+## **How to Use This Model in Practice**
+
+- **Input:** Flattened Excel-like row per client with required/present RE flags
+- **Prediction Output:** Binary classification – "Satisfactory" or "Rework Required"
+- **Confidence Score (optional):** Use model probability to rank borderline cases
+- **Action:** Send reports where model disagrees with 1LOD label to 2LOD for review
+
+---
+
+Would you like me to append this as a **new sheet** in the Excel report we built earlier? I can format it neatly for download.
+
+
+
 # Import necessary libraries
 import pandas as pd
 import numpy as np
