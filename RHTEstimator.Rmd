@@ -1,43 +1,18 @@
-Sure! Here's the plain markdown-friendly text without headings or formatting symbols:
 
----
 
-The bot already checks for presence — so why build a model?
 
-You're right to ask this. The model doesn't replace the bot, but it adds valuable intelligence on top of what the bot detects. Here's how:
+from sklearn.tree import export_graphviz
+import graphviz
 
-1. The Bot Flags Missing Documents — But Can’t Prioritize Risk  
-The bot does a binary check: is a required document present or not?  
-The model learns from history which missing documents actually led to rework.  
-This allows the model to prioritize high-impact misses (e.g., missing LexisNexis for a Casino is worse than missing a basic screenshot for a low-risk business).  
-Bot = binary rule-check  
-Model = data-informed risk assessment
-
-2. The Bot Treats All Review Elements Equally — The Model Doesn’t  
-The bot flags any required document that is missing.  
-But not all documents are equally important — the model learns which documents matter more in different contexts.  
-For example, missing UBO documents might be more critical for complex entities than individuals.
-
-3. The Model Learns from Historical Human Judgments  
-Even when documents were missing, 2LOD reviewers sometimes still marked the report as "Satisfactory".  
-The model learns these human judgment patterns and can mimic them, reducing unnecessary rework.  
-This is something the bot cannot do, since it follows strict presence/absence rules.
-
-4. Combines Presence Signals into a Holistic Risk Score  
-The model converts dozens of presence/absence indicators into a single interpretable probability score.  
-This simplifies downstream review and helps QA teams prioritize work instead of reading 50+ binary flags.
-
-5. Reduces False Positives from the Bot  
-The bot might flag minor issues as rework-worthy even when they aren't.  
-The model learns what is usually tolerated and what actually triggers rework — leading to fewer false positives and more accurate prioritization.
-
-6. Makes QA Review Smarter and More Targeted  
-The model can specifically identify cases where 1LOD labeled something "Satisfactory", but the feature pattern looks risky.  
-This enables smarter 2LOD intervention — something the bot cannot infer on its own.
-
-Analogy:  
-Think of the bot as a spell-checker — it flags missing items.  
-Think of the model as a proofreader — it tells you if the overall review still makes sense or needs revision.
-
-One-line summary:  
-“The bot checks for missing documents; the model learns from real outcomes to decide which missing pieces actually matter.”
+dot_data = export_graphviz(
+    clf,
+    out_file=None,
+    feature_names=X_train.columns,
+    class_names=clf.classes_,
+    filled=True,
+    rounded=True,
+    special_characters=True
+)
+graph = graphviz.Source(dot_data)
+graph.render("decision_tree")  # saves to file
+graph.view()
