@@ -1,18 +1,31 @@
+Sub ConvertRangeToTablesInAllSheets()
+    Dim ws As Worksheet
+    Dim tblRange As Range
+    Dim tblName As String
+    Dim startCell As String
+    Dim endCell As String
 
+    ' Set your desired range here (e.g., "A1:D10")
+    startCell = "A1"
+    endCell = "D10"
 
+    For Each ws In ThisWorkbook.Worksheets
+        On Error Resume Next ' In case of name conflicts or errors
+        Set tblRange = ws.Range(startCell & ":" & endCell)
+        tblName = "Tbl_" & ws.Name
 
-from sklearn.tree import export_graphviz
-import graphviz
+        ' Check if table already exists on the sheet
+        Dim tbl As ListObject
+        For Each tbl In ws.ListObjects
+            If tbl.Name = tblName Then
+                tbl.Delete
+            End If
+        Next tbl
 
-dot_data = export_graphviz(
-    clf,
-    out_file=None,
-    feature_names=X_train.columns,
-    class_names=clf.classes_,
-    filled=True,
-    rounded=True,
-    special_characters=True
-)
-graph = graphviz.Source(dot_data)
-graph.render("decision_tree")  # saves to file
-graph.view()
+        ' Create the table
+        ws.ListObjects.Add(xlSrcRange, tblRange, , xlYes).Name = tblName
+        On Error GoTo 0
+    Next ws
+
+    MsgBox "Tables created successfully in all sheets!"
+End Sub
