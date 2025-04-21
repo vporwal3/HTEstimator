@@ -1,12 +1,1 @@
-Sub InsertTextInAllSheets()
-    Dim ws As Worksheet
-
-    For Each ws In ThisWorkbook.Worksheets
-        With ws
-            .Range("A1").Value = "Report Generated"
-            .Range("D5").Value = "Confidential"
-        End With
-    Next ws
-
-    MsgBox "Text inserted in all sheets!"
-End Sub
+The student is employed as a Quant Analytics Associate and is responsible for developing quantitative data science and statistical models to support credit risk analysis. In this role, the student utilizes tools such as Python, BigQuery, and Looker Studio to extract insights from large datasets, design predictive models, and support data-driven decision-making processes within the organization. This position directly applies and enhances the student’s academic training in industrial engineering with concentration in advanced analytics, particularly in the areas of statistical methods, programming, applied machine learning, and data visualization. The role offers a practical environment for implementing advanced analytics techniques learned during the STEM degree, reinforcing the student’s knowledge while expanding their technical and professional skill set.
