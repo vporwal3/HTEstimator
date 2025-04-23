@@ -1,17 +1,9 @@
-
-Here’s a tailored, professional response you can use for the **"Goals and Objectives"** section of Form I-983, based on your role and degree:
-
----
-
-**Goals and Objectives:**  
-The student’s primary goal is to deepen their expertise in quantitative modeling, data science, and statistical analysis as applied to real-world credit risk problems. Through work-based learning, the student aims to enhance their skills in advanced data querying, feature engineering, predictive modeling, and performance monitoring of analytical models. Specific techniques to be developed include using Python for algorithm design, leveraging BigQuery for scalable data processing, and building visual dashboards in Looker Studio to communicate findings.
-
-The student will achieve these objectives through active participation in end-to-end modeling projects, mentorship from senior analysts and model developers, and iterative feedback on deliverables. Assignments will provide hands-on experience with large-scale data pipelines, cloud-based data ecosystems (Google Cloud Platform), and model validation processes. These activities directly build upon the student’s STEM academic foundation in industrial engineering and advanced analytics, reinforcing concepts from coursework in statistical methods, machine learning, and data visualization while promoting continuous learning in an applied environment.
-
----
-
-Let me know if you'd like a more concise version or one tailored for a specific review officer or employer tone.
-
-
-
-The student is employed as a Quant Analytics Associate and is responsible for developing quantitative data science and statistical models to support credit risk analysis. In this role, the student utilizes tools such as Python, BigQuery, and Looker Studio to extract insights from large datasets, design predictive models, and support data-driven decision-making processes within the organization. This position directly applies and enhances the student’s academic training in industrial engineering with concentration in advanced analytics, particularly in the areas of statistical methods, programming, applied machine learning, and data visualization. The role offers a practical environment for implementing advanced analytics techniques learned during the STEM degree, reinforcing the student’s knowledge while expanding their technical and professional skill set.
+WITH deduped AS (
+  SELECT *,
+         ROW_NUMBER() OVER (PARTITION BY MDM_ID ORDER BY review_category DESC) AS rn
+  FROM TEMP1
+)
+SELECT Category, review_category, COUNT(*) AS Unique_MDMs
+FROM deduped
+WHERE rn = 1
+GROUP BY Category, review_category
