@@ -1,4 +1,4 @@
-
+Thanks — understood. So you’re suggesting we should ideally look for variables that are I(1) without trend (i.e., not trend-stationary), to avoid spurious cointegration due to shared deterministic trends. Will make sure to check both 'c' and 'ct' cases during ADF.
 Absolutely! Here's a clear, concise, and copy-ready **summary** for your report on **why the constant term should be included during VIF calculation**, backed by **mathematical and statistical intuition**:
 
 ---
