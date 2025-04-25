@@ -1,3 +1,22 @@
+Why autolag='AIC'?
+
+	•	Your sample size (n = 300) is large enough that AIC won’t overfit easily.
+	•	AIC balances goodness of fit with complexity, making it a robust choice for business/financial data.
+	•	BIC is more conservative (fewer lags), but in your case, the cost of missing important lags is higher than overfitting slightly.
+
+Why maxlag=24 is safe:
+
+	•	Monthly data → lag 12 = 1 year, lag 24 = 2 years
+	•	You may want to capture annual and biannual cycles common in fee-based revenue/expenses (e.g., seasonal fees, bonuses, compliance cycles).
+	•	If you leave maxlag=None, statsmodels will use Schwert’s rule:
+
+
+\text{maxlag} = \lfloor 12 \cdot (n / 100)^{1/4} \rfloor = \lfloor 12 \cdot (3)^{1/4} \rfloor = \lfloor 12 \cdot 1.316 \rfloor = \lfloor 15.8 \rfloor = 15
+
+
+→ So it will test up to 15 lags, which is okay, but 24 gives more flexibility if you’re concerned about seasonal structure.
+
+
 autolag,maxlag,What happens
 'AIC',None,Tries 0 to maxlag (computed via Schwert rule), chooses best lag based on AIC
 'BIC',None,Same as above but based on BIC
