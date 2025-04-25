@@ -1,3 +1,24 @@
+Here’s a concise, copy-ready summary for your report summarizing all three ADF test parameter choices for **quarterly bank fee income and expenses data (2000–2024):**
+
+---
+
+### **ADF Test Configuration Summary (Quarterly Data, 2000–2024):**
+
+- **Regression Component (`regression='c'` and `'ct'`):**  
+  Both a constant-only model (`'c'`) and a constant plus linear trend model (`'ct'`) were tested to account for the potential presence of a structural trend in the time series. This ensures robustness in detecting stationarity, as financial series often exhibit long-term growth or drift.
+
+- **Lag Selection Strategy (`autolag='AIC'`):**  
+  The Akaike Information Criterion was used to automatically select the optimal number of lags. AIC balances model fit with complexity and is well-suited for medium-sized time series such as quarterly economic data.
+
+- **Maximum Lag Length (`maxlag=None`):**  
+  The maximum lag was determined automatically using the Schwert rule, which adjusts based on sample size. For ~100 quarterly observations, this yields a maximum lag of 12, allowing the model to consider up to 3 years of past behavior while avoiding overfitting.
+
+---
+
+Let me know if you want a version tailored for slides or a table format too!
+
+
+
 
 regression	'ct' or 'c'	Try both: 'ct' if there’s a clear upward/downward trend; 'c' if flat but non-zero mean
 
