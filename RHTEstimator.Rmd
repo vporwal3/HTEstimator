@@ -1,3 +1,39 @@
+
+Sure! Here's a clean, copy-paste-ready summary for your report on **max lag selection in the ADF test**:
+
+---
+
+### **Summary: Choosing the Appropriate `maxlag` in the ADF Test**
+
+Selecting the right `maxlag` is critical for balancing model validity and test power:
+
+- **Max lag too low:**
+  - May fail to capture autocorrelation in residuals.
+  - Can lead to **false detection of stationarity** (Type I error).
+  - Risk: **Underfitting** the model.
+
+- **Max lag too high:**
+  - Consumes degrees of freedom, especially in short time series.
+  - Increases risk of **overfitting**, reducing the test’s power to reject the null.
+  - Can produce **unstable or spurious results** due to small effective sample size.
+
+- **Ideal max lag (rule of thumb):**
+  - Let `maxlag=None` to use the **Schwert rule**:  
+    \[
+    \text{maxlag} = \lfloor 12 \cdot (n/100)^{1/4} \rfloor
+    \]
+  - Combine with `autolag='AIC'` or `'BIC'` to select the optimal lag automatically.
+  - For small samples (n < 100): cap `maxlag` at 4–6.
+  - For high-frequency data (e.g., hourly): consider domain-specific lags (e.g., 24, 48).
+
+Using an appropriate `maxlag` ensures the ADF test retains both statistical validity and power to detect stationarity.
+
+---
+
+Let me know if you want a table version as well!
+
+
+
 No — you should NOT drop the model based on the constant term’s VIF.
 
 Why?
