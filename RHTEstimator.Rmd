@@ -1,3 +1,6 @@
+
+trend, maxlag, and autolag in coint() work similarly to adfuller(), because under the hood, the Engle-Granger cointegration test in statsmodels.coint() uses the ADF test on the residuals from the cointegration regression.
+
 Here’s a concise, copy-ready summary for your report summarizing all three ADF test parameter choices for **quarterly bank fee income and expenses data (2000–2024):**
 
 ---
