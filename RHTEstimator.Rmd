@@ -1,9 +1,319 @@
-WITH deduped AS (
-  SELECT *,
-         ROW_NUMBER() OVER (PARTITION BY MDM_ID ORDER BY review_category DESC) AS rn
-  FROM TEMP1
-)
-SELECT Category, review_category, COUNT(*) AS Unique_MDMs
-FROM deduped
-WHERE rn = 1
-GROUP BY Category, review_category
+Great question! Let's clarify this explicitly:
+
+---
+
+## 1\. Should the constant (intercept) term be included in VIF calculation?
+
+**No**, typically the constant term (**intercept**) should **not** be included in your VIF calculation.
+
+- **Reason:**  
+  VIF measures multicollinearity among your independent variables, and the constant term is not considered an explanatory variable. It is simply a baseline or intercept and does not contribute to multicollinearity among predictors.
+
+- Most statistical libraries/packages (e.g., `statsmodels` in Python) automatically handle this by excluding the constant when computing VIF.
+
+---
+
+## 2\. What if you accidentally include the constant term?
+
+- If the constant term is included by mistake, its VIF will often be very high—often extremely large (e.g., 100+)—since it correlates strongly with all variables by construction.
+- **However**, a high VIF for the constant is meaningless and doesn't indicate actual multicollinearity issues. You should **ignore** the constant’s VIF in such cases.
+
+**Do not remove** the constant term due to its VIF. It's always acceptable (and necessary) to have an intercept unless your model explicitly needs no intercept (rare).
+
+---
+
+## 3\. Proper procedure to compute VIF correctly (example in Python):
+
+Here's how to correctly calculate VIF, explicitly excluding constant/intercept:
+
+```python
+import pandas as pd
+from statsmodels.stats.outliers_influence import variance_inflation_factor
+import statsmodels.api as sm
+
+# Assume X is your dataframe of independent variables
+X_const = sm.add_constant(X)
+
+# Compute VIF for all predictors (skip intercept explicitly)
+vif_df = pd.DataFrame({
+    "Variable": X_const.columns,
+    "VIF": [variance_inflation_factor(X_const.values, i)
+            for i in range(X_const.shape[1])]
+})
+
+# Exclude the constant term from the output
+vif_df_no_const = vif_df[vif_df['Variable'] != 'const']
+print(vif_df_no_const)
+```
+
+- **Only use VIF values for explanatory variables** (not for "const").
+
+---
+
+## 4\. General VIF thresholds (for explanatory variables):
+
+| VIF Value          | Recommendation                                  |
+|--------------------|-------------------------------------------------|
+| VIF < 5            | Usually okay, minimal multicollinearity         |
+| 5 ≤ VIF < 10       | Moderate concern, consider investigation        |
+| VIF ≥ 10           | High concern, likely remove or transform variable |
+
+---
+
+## Summary clearly:
+
+- **Exclude** constant term from VIF calculations.
+- **Ignore** VIF values calculated on constant if included accidentally.
+- **Never remove the intercept** because of high VIF.
+
+Only base your decisions on VIF values of actual predictor variables.
+
+Here's a clear, structured guide on choosing appropriate arguments for the **Augmented Dickey-Fuller (ADF)** test using `statsmodels` (`adfuller`) in Python:
+
+---
+
+## **1. ADF Test with `adfuller()` function**
+
+The `adfuller` function from the `statsmodels.tsa.stattools` module tests for stationarity in a time series.
+
+**Basic Syntax:**
+
+```python
+from statsmodels.tsa.stattools import adfuller
+
+adfuller(x, maxlag=None, regression='c', autolag='AIC')
+```
+
+---
+
+## **2. Choosing the Appropriate Arguments**
+
+The primary arguments and recommended choices are:
+
+### **a. `x` (required)**  
+- The time series data you want to test (e.g., pandas Series or NumPy array).
+
+### **b. `maxlag` (optional)**  
+- The maximum lag included in the test.
+- If `autolag` is used, `maxlag` is just the maximum lag considered for optimization.  
+- Typically, `None` is sufficient; the test automatically selects a suitable lag based on the `autolag` method.
+
+**Recommended choice:**
+```python
+maxlag = None  # auto-selected by the test
+```
+
+### **c. `regression` (important)**  
+Specifies the type of deterministic components included in the ADF regression model:
+
+| Option | Meaning                             | Typical Use Case                             |
+|--------|-------------------------------------|----------------------------------------------|
+| `'c'`  | Constant (intercept)                | **Most common** (default), data has non-zero mean |
+| `'ct'` | Constant and linear trend           | Data has clear linear trend                  |
+| `'ctt'`| Constant, linear, and quadratic trend | Rarely used, strong quadratic trend |
+| `'nc'` | No constant, no trend               | Rarely used, data has mean ≈ 0 (centered)    |
+
+**Recommended choice for most applications:**  
+```python
+regression = 'c'  # most common default choice
+```
+
+Use `'ct'` only if a linear trend is visually evident in your data.
+
+### **d. `autolag` (important)**  
+Method to automatically select optimal lag length for the ADF regression:
+
+| Option   | Description                                | Recommended |
+|----------|--------------------------------------------|-------------|
+| `'AIC'`  | Minimizes Akaike Information Criterion     | **Recommended (default)**, robust and widely used |
+| `'BIC'`  | Minimizes Bayesian Information Criterion   | Slightly stricter, useful if you prefer fewer lags |
+| `'t-stat'` | Based on significance of last lag        | Less common, less stable |
+| `None`   | User manually specifies `maxlag`           | Only for advanced cases |
+
+**Recommended choice:**  
+```python
+autolag = 'AIC'  # default, robust, suitable for most cases
+```
+
+---
+
+## **3. Typical Recommended Usage Example:**
+
+```python
+from statsmodels.tsa.stattools import adfuller
+
+result = adfuller(x, regression='c', autolag='AIC')
+
+# Output interpretation clearly
+adf_statistic, p_value, used_lag, n_obs, critical_values, icbest = result
+
+print('ADF Statistic:', adf_statistic)
+print('p-value:', p_value)
+print('Critical Values:')
+for key, value in critical_values.items():
+    print(f'   {key}: {value}')
+```
+
+---
+
+## **4. Interpretation Quickly:**
+
+| p-value                  | Stationarity Interpretation                    | Action                        |
+|--------------------------|-----------------------------------------------|-------------------------------|
+| p-value ≤ 0.05           | Reject null hypothesis → **Stationary**        | Good, no differencing needed. |
+| p-value > 0.05           | Fail to reject null → **Non-stationary**       | Differencing/transform needed |
+
+---
+
+## **Summary (Recommended Arguments Clearly):**
+
+| Argument    | Recommended Value |
+|-------------|-------------------|
+| `maxlag`    | `None`            |
+| `regression`| `'c'` *(default)* |
+| `autolag`   | `'AIC'` *(default)* |
+
+This combination is the standard, robust starting point and suits most practical scenarios.
+
+---
+
+### **In short:**
+
+```python
+adfuller(x, regression='c', autolag='AIC')
+```
+
+This is the **recommended best-practice usage** of the ADF test in Python's `statsmodels`.
+
+
+
+Absolutely! Let’s walk through the **cointegration test** using `statsmodels.tsa.stattools.coint` in Python — what it does, how to interpret it, and **how to choose the right arguments**.
+
+---
+
+## **1. What is Cointegration?**
+
+**Cointegration** tests whether two (or more) **non-stationary time series** move together in the long run — meaning a **linear combination of them is stationary**, even if each one is not.
+
+### Real-world analogy:
+Two stocks (say A and B) may individually follow random walks (non-stationary), but their **spread** (A - kB) may be stationary. That implies a long-term equilibrium relationship.
+
+---
+
+## **2. The Engle-Granger Cointegration Test**
+
+The `coint()` function in `statsmodels` implements the **Engle-Granger two-step method**:
+
+### Step 1:
+Run a linear regression:  
+\[
+y = \beta x + \epsilon
+\]
+
+### Step 2:
+Test the residuals \(\epsilon\) for **stationarity** using the **ADF test**.
+
+- If the residuals are stationary → **y and x are cointegrated**
+- If not → no cointegration (no long-term equilibrium)
+
+---
+
+## **3. Syntax of `statsmodels.tsa.stattools.coint`**
+
+```python
+from statsmodels.tsa.stattools import coint
+
+coint(y, x, trend='c', method='aeg', maxlag=None, autolag='aic')
+```
+
+### **Key Arguments and Recommendations:**
+
+| Argument     | Purpose | Recommended Value |
+|--------------|---------|-------------------|
+| `y`          | Dependent variable (e.g., stock A) | Required |
+| `x`          | Regressor/independent variable (e.g., stock B) | Required |
+| `trend`      | Type of deterministic trend to include in the regression | `'c'` *(default)* |
+| `method`     | Cointegration test method (`'aeg'` = Engle-Granger) | `'aeg'` *(only option now)* |
+| `maxlag`     | Maximum lag in ADF test for residuals | `None` |
+| `autolag`    | Criterion to choose optimal lag | `'aic'` *(recommended)* |
+
+---
+
+### `trend` options (same as ADF):
+
+| Value  | Meaning                        | When to use                                   |
+|--------|--------------------------------|-----------------------------------------------|
+| `'c'`  | Constant (default)             | **Most common**, if your data has a non-zero mean |
+| `'ct'` | Constant + linear trend        | If series appear to have a trend              |
+| `'n'`  | No trend or constant           | Use with mean-zero data (rare)                |
+
+---
+
+## **4. Output of `coint()` function**
+
+```python
+score, pvalue, crit_values = coint(y, x)
+```
+
+| Output          | Meaning                                              |
+|-----------------|------------------------------------------------------|
+| `score`         | The test statistic (ADF of residuals)               |
+| `pvalue`        | p-value for the cointegration test                  |
+| `crit_values`   | Critical values at 1%, 5%, and 10% significance levels |
+
+---
+
+## **5. Example: Cointegration Test in Python**
+
+```python
+from statsmodels.tsa.stattools import coint
+import pandas as pd
+
+# Example: two time series (non-stationary)
+y = df['StockA']
+x = df['StockB']
+
+score, pvalue, crit = coint(y, x, trend='c', autolag='aic')
+
+print("Cointegration Test Statistic:", score)
+print("p-value:", pvalue)
+print("Critical Values:", crit)
+```
+
+---
+
+## **6. How to Interpret the Result**
+
+| If p-value     | Interpretation                            | Cointegrated? |
+|----------------|--------------------------------------------|----------------|
+| ≤ 0.05         | Reject null → **Residuals are stationary** → **Yes** |
+| > 0.05         | Fail to reject null → Residuals non-stationary → **No** |
+
+The null hypothesis of the cointegration test is:
+> “**No cointegration** between y and x.”
+
+---
+
+## **7. Summary: Recommended Arguments for `coint()`**
+
+```python
+coint(y, x, trend='c', autolag='aic')
+```
+
+| Parameter | Recommended |
+|-----------|-------------|
+| `trend`   | `'c'` (constant, unless you see trend in data) |
+| `autolag` | `'aic'` (auto lag selection via AIC)            |
+| `maxlag`  | `None` (let autolag decide)                     |
+
+---
+
+### In Short:
+
+- **Use `coint()` to test for long-term relationship** between two non-stationary series.
+- Focus on the **p-value**: If it's ≤ 0.05 → series are cointegrated.
+- **Exclude constant/trend terms only if you're sure** the data has zero mean or no drift — `'c'` is safest.
+
+Let me know if you'd like help visualizing cointegration or seeing how the spread looks over time!
+
+
