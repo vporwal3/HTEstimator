@@ -1,3 +1,11 @@
+autolag,maxlag,What happens
+'AIC',None,Tries 0 to maxlag (computed via Schwert rule), chooses best lag based on AIC
+'BIC',None,Same as above but based on BIC
+None,5,ADF test uses exactly 5 lags (no optimization)
+None,None,ADF test uses 0 lags — just a basic regression without lagged differences
+
+
+
 
 	1.	Plot the time series.
 	2.	Ask:
