@@ -1,4 +1,20 @@
+No — you should NOT drop the model based on the constant term’s VIF.
+
+Why?
+
+	1.	The intercept is not a predictor — it doesn’t affect predictions in the same way explanatory variables do.
+	2.	High VIF for the intercept is normal in models with:
+	•	Centered variables (e.g., mean-centered)
+	•	Strong correlation among variables and a constant offset
+	•	Dummy variable traps or near collinearity with dummies (e.g., when you have an intercept + many categorical levels)
+	3.	It doesn’t cause multicollinearity in your actual predictors — the VIF threshold logic applies only to predictors, not the intercept.
+
+
+
+
 Great question! Let's clarify this explicitly:
+
+
 
 ---
 
