@@ -1,3 +1,6 @@
+
+regression	'ct' or 'c'	Try both: 'ct' if there’s a clear upward/downward trend; 'c' if flat but non-zero mean
+
 Why autolag='AIC'?
 
 	•	Your sample size (n = 300) is large enough that AIC won’t overfit easily.
