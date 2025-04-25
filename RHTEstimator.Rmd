@@ -1,3 +1,9 @@
+Situation,Use trend=,Why
+Both y and x trend, but y - x is stable over time,'c',Residuals (long-run spread) revert to a constant
+Both y and x trend, and the gap between them also trends,'ct',Long-run relationship includes a time trend
+Both series are zero-mean and flat (rare),'n',No constant/trend needed — not common in finance
+
+
 
 trend, maxlag, and autolag in coint() work similarly to adfuller(), because under the hood, the Engle-Granger cointegration test in statsmodels.coint() uses the ADF test on the residuals from the cointegration regression.
 
