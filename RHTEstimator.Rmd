@@ -1,4 +1,13 @@
 
+	1.	Plot the time series.
+	2.	Ask:
+	•	Does the mean look like zero? → 'n'
+	•	Is there a visible upward/downward slope? → 'ct'
+	•	Is it flat but off-zero? → 'c'
+	•	Any curved pattern (e.g., bowl or hill)? → 'ctt'
+
+
+
 Sure! Here's a clean, copy-paste-ready summary for your report on **max lag selection in the ADF test**:
 
 ---
