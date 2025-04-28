@@ -1,3 +1,12 @@
+Thanks for the feedback!
+I agree the original statement was a bit vague — apologies for the confusion.
+What I meant by “somewhat like regression parameter” is that the trend option in the cointegration test plays a similar role conceptually — it specifies the deterministic components (constant/trend) in the cointegration regression, just like the regression option in a standard ADF test specifies the deterministic terms.
+
+	In terms of choosing the trend parameter: it should be based on the behavior of the original series — if they have no drift or trend, use “n”; if they have drift but no strong trend, use “c”; and if they have strong visible trends, use “ct”.
+
+	And yes, you are correct — the ADF test on the residuals is run with option “n” by default, without access to modify it. Thanks again for pointing this out — I’ll update the wording to be more precise.
+
+
 Observation from Original Series (Y, X),Drift present?,Clear Trend?,Use trend=,Why?
 Series fluctuate randomly around zero (pure random walk),No,No,"n" (no constant, no trend),No drift, no trend; series are purely random without systematic movement
 Series gradually rise or fall over time (small consistent upward or downward drift),Yes,No,"c" (constant only),There is a drift (mean offset), but no strong trend shaping the data
