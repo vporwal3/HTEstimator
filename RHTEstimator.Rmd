@@ -1,3 +1,7 @@
+This is because the cointegration regression already captures any deterministic components, and the residuals should be tested purely for stationarity around zero without adding any additional trend or constant terms. 
+
+
+
 Thanks for the feedback!
 I agree the original statement was a bit vague — apologies for the confusion.
 What I meant by “somewhat like regression parameter” is that the trend option in the cointegration test plays a similar role conceptually — it specifies the deterministic components (constant/trend) in the cointegration regression, just like the regression option in a standard ADF test specifies the deterministic terms.
