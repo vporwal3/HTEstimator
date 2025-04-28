@@ -1,3 +1,14 @@
+Observation from Original Series (Y, X),Drift present?,Clear Trend?,Use trend=,Why?
+Series fluctuate randomly around zero (pure random walk),No,No,"n" (no constant, no trend),No drift, no trend; series are purely random without systematic movement
+Series gradually rise or fall over time (small consistent upward or downward drift),Yes,No,"c" (constant only),There is a drift (mean offset), but no strong trend shaping the data
+Series steadily and strongly increase or decrease over time (clear straight trend line),Yes,Yes,"ct" (constant + linear trend),Series have a deterministic trend component (systematic long-term slope)
+
+
+
+
+
+
+
 Thanks — understood. So you’re suggesting we should ideally look for variables that are I(1) without trend (i.e., not trend-stationary), to avoid spurious cointegration due to shared deterministic trends. Will make sure to check both 'c' and 'ct' cases during ADF.
 Absolutely! Here's a clear, concise, and copy-ready **summary** for your report on **why the constant term should be included during VIF calculation**, backed by **mathematical and statistical intuition**:
 
