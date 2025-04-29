@@ -1,4 +1,28 @@
+dtype_map = df.dtypes.to_dict()
+
+import pandas as pd
+
+def force_cast_columns(df):
+    for col, dtype in df.dtypes.items():
+        try:
+            if pd.api.types.is_numeric_dtype(dtype):
+                # Coerce bad values to NaN
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+            elif pd.api.types.is_datetime64_any_dtype(dtype):
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+            elif pd.api.types.is_string_dtype(dtype) or dtype == 'object':
+                df[col] = df[col].astype('string')
+            else:
+                df[col] = df[col].astype(dtype)
+        except Exception as e:
+            print(f"Column '{col}' could not be converted to {dtype}: {e}")
+    return df
+
+
+
 This is because the cointegration regression already captures any deterministic components, and the residuals should be tested purely for stationarity around zero without adding any additional trend or constant terms. 
+
+
 
 
 
