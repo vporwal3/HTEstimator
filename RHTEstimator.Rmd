@@ -1,3 +1,5 @@
+df = df[["new_col"] + [c for c in df.columns if c != "new_col"]]
+
 for col in df.columns:
     if df[col].dtype == "object":
         df[col] = df[col].astype("string")
