@@ -1,3 +1,28 @@
+Sure! Here's a clearer and more professional version of your Teams message:
+
+---
+
+Hi Team,
+
+There are two automation projects currently in progress, and I wanted to share a quick overview of our role in each:
+
+**1. CDD/EDD Document Summarization**  
+The objective here is to use Copilot to generate summaries from CDD/EDD reports. Our task will be to craft effective prompts that guide Copilot to extract key insights from these documents. For example, we might input a Lexis Nexis report and use a prompt like:  
+*“Summarize key risk indicators and findings from this document.”*
+
+**2. Risk Report Deck Creation**  
+This project involves building a slide deck from a Tableau report. A bot extracts charts, tables, and other artifacts from Tableau and compiles them into PowerPoint slides. Our role is to write prompts for Copilot to generate summaries of these artifacts and enhance the slides with meaningful narratives.  
+We’ll also explore:
+- The best format to provide the artifacts to Copilot (e.g., table as image vs. Excel/CSV)
+- Whether to summarize multiple slides/artifacts at once or one at a time
+
+Let me know if you'd like to brainstorm ideas or set up a quick sync.
+
+--- 
+
+Would you like a shorter or more casual version too?
+
+
 df = df[["new_col"] + [c for c in df.columns if c != "new_col"]]
 
 for col in df.columns:
