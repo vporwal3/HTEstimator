@@ -1,3 +1,5 @@
+=IFERROR(INDEX($C$39:$C$216, MATCH(1, ($A$39:$A$216=$H21)*($B$39:$B$216=I$20), 0)), 0)
+
 Sure! Here's a clearer and more professional version of your Teams message:
 
 ---
