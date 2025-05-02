@@ -1,4 +1,19 @@
-=IFERROR(INDEX($C$39:$C$216, MATCH(1, ($A$39:$A$216=$H21)*($B$39:$B$216=I$20), 0)), 0)
+# Source DataFrame with correct types
+dtypes_reference = df_source.dtypes
+# Target DataFrame (e.g., raw input)
+for col in df_target.columns:
+    if col in dtypes_reference:
+        try:
+            df_target[col] = df_target[col].astype(dtypes_reference[col])
+        except Exception as e:
+            print(f"Could not convert column {col}: {e}")
+
+=
+
+
+
+
+IFERROR(INDEX($C$39:$C$216, MATCH(1, ($A$39:$A$216=$H21)*($B$39:$B$216=I$20), 0)), 0)
 
 Sure! Here's a clearer and more professional version of your Teams message:
 
