@@ -1,4 +1,6 @@
-# Source DataFrame with correct types
+final_dmr_df['ORIGINATION_DATE'] = pd.to_datetime(final_dmr_df['ORIGINATION_DATE'], errors='coerce')
+
+m# Source DataFrame with correct types
 dtypes_reference = df_source.dtypes
 # Target DataFrame (e.g., raw input)
 for col in df_target.columns:
