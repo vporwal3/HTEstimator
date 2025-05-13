@@ -2,7 +2,7 @@ Hi Jordan,
 
 Thanks for the clarification — that helps. I’ve currently fitted the model using an ARX framework on the raw quarterly series. Would it make sense for me to generate a forward forecast based on that model to evaluate how the trend behaves, and compare it to the CASTA baseline?
 
-Happy to adjust the approach if you have something else in mind as well — just let me know how you’d like me to proceed.
+I’m still learning through this process, so any guidance on how you’d recommend approaching the next steps would be greatly appreciated.
 
 Best,
 Vansh
