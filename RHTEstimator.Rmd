@@ -1,12 +1,4 @@
-Hi Jordan,
-
-Thanks for the clarification — that helps. I’ve currently fitted the model using an ARX framework on the raw quarterly series. Would it make sense for me to generate a forward forecast based on that model to evaluate how the trend behaves, and compare it to the CASTA baseline?
-
-I’m still learning through this process, so any guidance on how you’d recommend approaching the next steps would be greatly appreciated.
-
-Best,
-Vansh
-
+Got it — that makes sense. I’ll go ahead and generate the forward forecast and compare the scenario projections to the CASTA baseline to check for signs of overfitting or omitted variable bias. 
 
 
 final_dmr_df['ORIGINATION_DATE'] = pd.to_datetime(final_dmr_df['ORIGINATION_DATE'], errors='coerce')
