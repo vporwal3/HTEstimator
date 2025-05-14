@@ -1,3 +1,69 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import re
+
+# Load the data
+df = pd.read_excel("your_file.xlsx", sheet_name="WOE_Summary")
+df = df[df['Var'].notna()]
+df['Event rate'] = pd.to_numeric(df['Event rate'], errors='coerce')
+df['Bin'] = df['Bin'].astype(str)
+
+def format_bin_label(bin_str):
+    # Extract numeric values using regex
+    match = re.findall(r"[-+]?\d*\.\d+|\d+", bin_str)
+    if not match:
+        return bin_str  # Return as-is if no numbers
+
+    # Convert to floats
+    nums = [float(m) for m in match]
+    
+    # Check max value to decide formatting scale
+    max_val = max([abs(n) for n in nums])
+    if max_val < 100:  # Keep simple format
+        return bin_str
+    elif max_val < 1_000:
+        fmt = lambda x: str(round(x))
+        left = fmt(nums[0])
+        right = fmt(nums[1]) if len(nums) > 1 else ''
+        return f"({left}, {right})"
+    else:
+        fmt = lambda x: str(round(x / 1000)) + "k"
+        left = "-∞" if "inf" in bin_str or "-inf" in bin_str else fmt(nums[0])
+        right = "∞" if "inf" in bin_str else fmt(nums[1]) if len(nums) > 1 else ''
+        return f"({left}, {right})"
+
+# Apply bin formatting
+df['Pretty Bin'] = df['Bin'].apply(format_bin_label)
+
+def plot_variable_histogram(data, var_name):
+    var_df = data[data['Var'] == var_name].copy()
+    avg_event_rate = var_df['Event rate'].mean()
+    pretty_bins = var_df['Pretty Bin'].values
+    max_val = max([float(x) for x in re.findall(r'\d+', ' '.join(var_df['Bin']))]) if not var_df.empty else 0
+
+    plt.figure(figsize=(10, 5))
+    bars = plt.bar(pretty_bins, var_df['Event rate'], color='salmon')
+    plt.axhline(y=avg_event_rate, color='black', linestyle='--', label=f'Avg TARGET: {avg_event_rate:.2%}')
+
+    plt.xticks(rotation=45, ha='right')
+    plt.xlabel("Bin")
+    plt.ylabel("TARGET (Event rate)")
+    
+    # Add scale hint in title if needed
+    scale_note = " (Bin values scaled to 10³)" if max_val >= 1000 else ""
+    plt.title(f"{var_name} vs TARGET{scale_note}")
+    
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+# Example variable list
+selected_vars = ['LINE_OUTS', 'VAR_2', 'VAR_3']  # Adjust to your case
+for var in selected_vars:
+    if var in df['Var'].values:
+        plot_variable_histogram(df, var)
+
+
 Got it — that makes sense. I’ll go ahead and generate the forward forecast and compare the scenario projections to the CASTA baseline to check for signs of overfitting or omitted variable bias. 
 
 
