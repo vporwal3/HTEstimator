@@ -1,8 +1,9 @@
 def format_bin_label(bin_str):
-    # Extract numbers
+    import re
+
     match = re.findall(r"[-+]?\d*\.\d+|\d+", bin_str)
     if not match:
-        return bin_str  # Keep unchanged if no numbers
+        return bin_str
 
     nums = [float(m) for m in match]
     left_raw = bin_str.strip().split(',')[0]
@@ -10,18 +11,19 @@ def format_bin_label(bin_str):
     left_inf = '-inf' in left_raw.lower()
     right_inf = 'inf' in right_raw.lower()
 
-    # Determine scale
-    max_val = max([abs(n) for n in nums])
-    if max_val < 100:  # e.g., small rating scores
-        fmt = lambda x: str(round(x))
-    else:
-        fmt = lambda x: str(round(x / 1000)) + "k"
+    def smart_fmt(x):
+        if x >= 100:
+            return f"{round(x / 1000)}k"
+        elif x.is_integer():
+            return str(int(x))
+        else:
+            return f"{round(x, 2)}"
 
     if left_inf and not right_inf:
-        return f"<= {fmt(nums[0])}"
+        return f"<= {smart_fmt(nums[0])}"
     elif right_inf and not left_inf:
-        return f"> {fmt(nums[0])}"
+        return f"> {smart_fmt(nums[0])}"
     elif not left_inf and not right_inf:
-        return f"{fmt(nums[0])} - {fmt(nums[1])}"
+        return f"{smart_fmt(nums[0])} - {smart_fmt(nums[1])}"
     else:
-        return bin_str  # fallback if both sides are inf (shouldn't happen)
+        return bin_str  # fallback
