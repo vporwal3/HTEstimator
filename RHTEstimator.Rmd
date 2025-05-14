@@ -1,3 +1,34 @@
+def format_bin_label(bin_str):
+    # Extract numeric values using regex
+    match = re.findall(r"[-+]?\d*\.\d+|\d+", bin_str)
+    if not match:
+        return bin_str  # Return as-is if no numbers
+
+    nums = [float(m) for m in match]
+    left_raw = bin_str.strip().split(',')[0]
+    right_raw = bin_str.strip().split(',')[1] if ',' in bin_str else ''
+
+    # Decide scale
+    max_val = max([abs(n) for n in nums])
+    if max_val < 100:  # Small discrete values, keep it simple
+        fmt = lambda x: str(round(x))
+    else:
+        fmt = lambda x: str(round(x / 1000)) + "k"
+
+    # Build pretty bin label
+    if "-inf" in left_raw.lower():
+        left = "-∞"
+    else:
+        left = fmt(nums[0])
+
+    if "inf" in right_raw.lower():
+        right = "∞"
+    else:
+        right = fmt(nums[1]) if len(nums) > 1 else ""
+
+    return f"({left}, {right})"
+
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import re
