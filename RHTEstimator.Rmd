@@ -1,5 +1,33 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 from ipywidgets import interact, widgets
 
+# --- Data Preprocessing ---
+df['SNAPSHOT_DT'] = pd.to_datetime(df['SNAPSHOT_DT'])
+df['YEAR'] = df['SNAPSHOT_DT'].dt.year
+df['MONTH'] = df['SNAPSHOT_DT'].dt.month
+df['QUARTER'] = df['SNAPSHOT_DT'].dt.to_period('Q')
+
+# Define pandemic era
+def classify_pandemic_era(date):
+    quarter = date.to_period('Q')
+    if quarter >= pd.Period('2018Q1') and quarter <= pd.Period('2019Q4'):
+        return 'Pre-Pandemic'
+    elif quarter >= pd.Period('2020Q1') and quarter <= pd.Period('2022Q4'):
+        return 'Pandemic'
+    elif quarter >= pd.Period('2023Q1'):
+        return 'Post-Pandemic'
+    else:
+        return 'Other'
+
+df['PANDEMIC_ERA'] = df['SNAPSHOT_DT'].apply(classify_pandemic_era)
+
+# --- Filter Dropdowns ---
+year_options = sorted(df['YEAR'].dropna().unique())
+category_options = ['All'] + sorted(df['HIGH_LVL_CATEGORY_DESC'].dropna().unique())
+
+# --- Plot 1: Avg Transaction Amount per Borrower ---
 @interact(
     year=widgets.Dropdown(options=year_options, description='Year'),
     category=widgets.Dropdown(options=category_options, description='Category')
@@ -23,8 +51,7 @@ def plot_avg_tran_amt_by_category(year, category):
     plt.tight_layout()
     plt.show()
 
-
-
+# --- Plot 2: Avg Monthly Transaction Count per Borrower ---
 @interact(
     year=widgets.Dropdown(options=year_options, description='Year'),
     category=widgets.Dropdown(options=category_options, description='Category')
@@ -50,3 +77,29 @@ def plot_avg_txn_count_by_category(year, category):
 
     plt.tight_layout()
     plt.show()
+
+# --- Plot 3: Borrower-Level Transaction Amounts by Pandemic Era ---
+borrower_era_stats = df.groupby(['BORROWER_NAME', 'PANDEMIC_ERA']).agg(
+    txn_count=('TRAN_AMT', 'count'),
+    avg_amt=('TRAN_AMT', 'mean'),
+    total_amt=('TRAN_AMT', 'sum')
+).reset_index()
+
+plt.figure(figsize=(10,6))
+sns.violinplot(data=borrower_era_stats, x='PANDEMIC_ERA', y='avg_amt', inner='box')
+plt.title('Avg Transaction Amount per Borrower Across Pandemic Eras')
+plt.xlabel('Pandemic Era')
+plt.ylabel('Avg Transaction Amount')
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+# --- Optional: Summary Table ---
+summary = df.groupby('PANDEMIC_ERA').agg(
+    total_transactions=('TRAN_AMT', 'count'),
+    total_amount=('TRAN_AMT', 'sum'),
+    avg_transaction_amt=('TRAN_AMT', 'mean'),
+    unique_borrowers=('BORROWER_NAME', 'nunique')
+).reset_index()
+
+print(summary)
