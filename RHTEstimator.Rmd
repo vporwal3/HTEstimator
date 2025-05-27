@@ -1,127 +1,33 @@
 import pandas as pd
 import matplotlib.pyplot as plt
-import re
+import seaborn as sns
+from ipywidgets import interact, widgets
 
-# Load the data (replace with your file path)
-df = pd.read_excel("your_file.xlsx", sheet_name="WOE_Summary")
+# Convert SNAPSHOT_DT to datetime
+df['SNAPSHOT_DT'] = pd.to_datetime(df['SNAPSHOT_DT'])
 
-# Convert columns
-df = df[df['Var'].notna()]
-df['Event rate'] = pd.to_numeric(df['Event rate'], errors='coerce')
-df['Bin'] = df['Bin'].astype(str)
+# Extract year
+df['YEAR'] = df['SNAPSHOT_DT'].dt.year
 
-# ------------------ Bin Label Formatter ------------------ #
-def format_bin_label(bin_str):
-    match = re.findall(r"[-+]?\d*\.\d+|\d+", bin_str)
-    if not match:
-        return bin_str
+# Unique filter options
+year_options = sorted(df['YEAR'].dropna().unique())
+code_options = df['CR_OR_DB_CODE'].dropna().unique()
 
-    nums = [float(m) for m in match]
-    left_raw = bin_str.strip().split(',')[0]
-    right_raw = bin_str.strip().split(',')[1] if ',' in bin_str else ''
-    left_inf = '-inf' in left_raw.lower()
-    right_inf = 'inf' in right_raw.lower()
-
-    def smart_fmt(x):
-        if x >= 100:
-            return f"{round(x / 1000)}k"
-        elif x.is_integer():
-            return str(int(x))
-        else:
-            return f"{round(x, 2)}"
-
-    if left_inf and not right_inf:
-        return f"<= {smart_fmt(nums[0])}"
-    elif right_inf and not left_inf:
-        return f"> {smart_fmt(nums[0])}"
-    elif not left_inf and not right_inf:
-        return f"{smart_fmt(nums[0])} - {smart_fmt(nums[1])}"
-    else:
-        return bin_str  # Fallback
-
-# ------------------ Data Cleaner ------------------ #
-def clean_variable_data(df, var_name):
-    var_df = df[df['Var'] == var_name].copy()
-
-    # Normalize and filter unwanted bins
-    var_df['Bin'] = var_df['Bin'].astype(str).str.strip().str.lower()
-    var_df = var_df[~var_df['Bin'].isin(['special', 'nan'])]
-
-    # Rename 'missing' and drop if TARGET = 0
-    var_df['Bin'] = var_df['Bin'].replace({'missing': 'No Relationship'})
-    var_df = var_df[~((var_df['Bin'] == 'No Relationship') & (var_df['Event rate'] == 0))]
-
-    # Prettify bins
-    var_df['Pretty Bin'] = var_df['Bin'].apply(
-        lambda x: x if x == 'No Relationship' else format_bin_label(x)
-    )
-
-    return var_df
-
-# ------------------ Plot Function ------------------ #
-def plot_variable_histogram(df, var_name):
-    var_df = clean_variable_data(df, var_name)
-    if var_df.empty:
-        print(f"No valid data to plot for {var_name}")
-        return
-
-    avg_event_rate = var_df['Event rate'].mean()
-
-    plt.figure(figsize=(10, 5))
-    plt.bar(var_df['Pretty Bin'], var_df['Event rate'], color='salmon')
-    plt.axhline(y=avg_event_rate, color='black', linestyle='--', label=f'Avg TARGET: {avg_event_rate:.2%}')
-
-    plt.xticks(rotation=45, ha='right')
-    plt.xlabel("Bin")
-    plt.ylabel("TARGET (Event rate)")
-
-    # Optional scaling hint
-    numeric_vals = [float(x) for x in re.findall(r'\d+', ' '.join(var_df['Bin']))]
-    scale_note = " (Bin values scaled to 10³)" if numeric_vals and max(numeric_vals) >= 1000 else ""
-    plt.title(f"{var_name} vs TARGET{scale_note}")
-
-    plt.legend()
+@interact(year=widgets.Dropdown(options=year_options, description='Year'),
+          code=widgets.Dropdown(options=code_options, description='Type'))
+def plot_distribution(year, code):
+    # Filter
+    filtered = df[(df['YEAR'] == year) & (df['CR_OR_DB_CODE'] == code)]
+    
+    # Avg transaction amount per BORROWER_NAME
+    avg_amt = filtered.groupby('BORROWER_NAME')['TRAN_AMT'].mean().reset_index()
+    
+    # Plot
+    plt.figure(figsize=(10,6))
+    sns.histplot(avg_amt['TRAN_AMT'], bins=30, kde=True)
+    plt.title(f'Distribution of Avg Transaction Amount ({code}, {year})')
+    plt.xlabel('Average Transaction Amount')
+    plt.ylabel('Count of Borrowers')
+    plt.grid(True)
     plt.tight_layout()
     plt.show()
-
-# ------------------ Run for Selected Variables ------------------ #
-selected_vars = ['LINE_OUTS', 'VAR_2', 'VAR_3', 'VAR_4', 'VAR_5', 'VAR_6', 'VAR_7', 'VAR_8', 'VAR_9', 'VAR_10']  # Edit this list
-for var in selected_vars:
-    if var in df['Var'].values:
-        plot_variable_histogram(df, var)
-
-
-
-
-
-
-
-def format_bin_label(bin_str):
-    import re
-
-    match = re.findall(r"[-+]?\d*\.\d+|\d+", bin_str)
-    if not match:
-        return bin_str
-
-    nums = [float(m) for m in match]
-    left_raw = bin_str.strip().split(',')[0]
-    right_raw = bin_str.strip().split(',')[1] if ',' in bin_str else ''
-    left_inf = '-inf' in left_raw.lower()
-    right_inf = 'inf' in right_raw.lower()
-
-    def smart_fmt(x):
-        if x >= 100:
-            return f"{round(x / 1000)}k"
-        elif x.is_integer():
-            return str(int(x))
-        else:
-            return f"{round(x, 2)}"
-
-    if left_inf and not right_inf:
-        return f"<= {smart_fmt(nums[0])}"
-    elif right_inf and not left_inf:
-        return f"> {smart_fmt(nums[0])}"
-    elif not left_inf and not right_inf:
-        return f"{smart_fmt(nums[0])} - {smart_fmt(nums[1])}"
-    else:
-        return bin_str  # fallback
