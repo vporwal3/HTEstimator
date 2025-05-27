@@ -1,3 +1,12 @@
+Hi Jordan,
+
+I hope you’re doing well. Gang may have already mentioned this, but I just wanted to let you know that I’ve been temporarily reassigned to another project focused on the Commercial C&I default model through September.
+
+I wanted to check in and see if there’s someone who will be taking over my line items in the meantime, or if there’s a plan in place for how we’d like to handle them during this period.
+
+Please let me know how you’d like to proceed. Happy to assist with the transition as needed.
+
+
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
