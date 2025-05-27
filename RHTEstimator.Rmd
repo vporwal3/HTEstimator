@@ -1,6 +1,24 @@
-df['SNAPSHOT_DT'] = pd.to_datetime(df['SNAPSHOT_DT'])
-df['YEAR'] = df['SNAPSHOT_DT'].dt.year
-df['MONTH'] = df['SNAPSHOT_DT'].dt.month
+lfrom ipywidgets import interact, widgets
 
-year_options = sorted(df['YEAR'].dropna().unique())
-category_options = ['All'] + sorted(df['HIGH_LVL_CATEGORY_DESC'].dropna().unique())
+@interact(
+    year=widgets.Dropdown(options=year_options, description='Year'),
+    category=widgets.Dropdown(options=category_options, description='Category')
+)
+def plot_avg_tran_amt_by_category(year, category):
+    filtered = df[df['YEAR'] == year]
+    if category != 'All':
+        filtered = filtered[filtered['HIGH_LVL_CATEGORY_DESC'] == category]
+
+    fig, axes = plt.subplots(1, 2, figsize=(14,6), sharey=True)
+    for i, tx_type in enumerate(['Credit', 'Debit']):
+        sub_df = filtered[filtered['CR_OR_DB_CODE'] == tx_type]
+        avg_amt = sub_df.groupby('BORROWER_NAME')['TRAN_AMT'].mean().reset_index()
+
+        sns.histplot(avg_amt['TRAN_AMT'], bins=30, kde=True, ax=axes[i])
+        axes[i].set_title(f'{tx_type} - Avg Transaction Amount ({year})')
+        axes[i].set_xlabel('Avg Transaction Amount')
+        axes[i].set_ylabel('Count of Borrowers')
+        axes[i].grid(True)
+
+    plt.tight_layout()
+    plt.show()
