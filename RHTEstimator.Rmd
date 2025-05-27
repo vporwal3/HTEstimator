@@ -1,20 +1,6 @@
-@interact(year=widgets.Dropdown(options=year_options, description='Year'))
-def plot_avg_txn_count_by_type(year):
-    filtered = df[df['YEAR'] == year]
-    months_in_year = filtered['SNAPSHOT_DT'].dt.month.nunique()
+df['SNAPSHOT_DT'] = pd.to_datetime(df['SNAPSHOT_DT'])
+df['YEAR'] = df['SNAPSHOT_DT'].dt.year
+df['MONTH'] = df['SNAPSHOT_DT'].dt.month
 
-    fig, axes = plt.subplots(1, 2, figsize=(14,6), sharey=True)
-
-    for i, tx_type in enumerate(['Credit', 'Debit']):
-        sub_df = filtered[filtered['CR_OR_DB_CODE'] == tx_type]
-        txn_count = sub_df.groupby('BORROWER_NAME').size().reset_index(name='TXN_COUNT')
-        txn_count['TXN_PER_MONTH'] = txn_count['TXN_COUNT'] / months_in_year
-
-        sns.histplot(txn_count['TXN_PER_MONTH'], bins=30, kde=True, ax=axes[i])
-        axes[i].set_title(f'{tx_type} - Avg Monthly Transactions ({year})')
-        axes[i].set_xlabel('Avg Monthly Transactions')
-        axes[i].set_ylabel('Number of Borrowers')
-        axes[i].grid(True)
-
-    plt.tight_layout()
-    plt.show()
+year_options = sorted(df['YEAR'].dropna().unique())
+category_options = ['All'] + sorted(df['HIGH_LVL_CATEGORY_DESC'].dropna().unique())
