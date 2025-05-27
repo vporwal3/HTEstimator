@@ -3,6 +3,46 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from ipywidgets import interact, widgets
 
+# Convert to datetime if not already
+df['SNAPSHOT_DT'] = pd.to_datetime(df['SNAPSHOT_DT'])
+df['YEAR'] = df['SNAPSHOT_DT'].dt.year
+df['MONTH'] = df['SNAPSHOT_DT'].dt.month
+
+# Dropdown filter values
+year_options = sorted(df['YEAR'].dropna().unique())
+code_options = df['CR_OR_DB_CODE'].dropna().unique()
+
+@interact(year=widgets.Dropdown(options=year_options, description='Year'),
+          code=widgets.Dropdown(options=code_options, description='Type'))
+def plot_transaction_count(year, code):
+    # Filter by year and type
+    filtered = df[(df['YEAR'] == year) & (df['CR_OR_DB_CODE'] == code)]
+    
+    # Number of months with data in this year
+    months_in_year = filtered['MONTH'].nunique()
+
+    # Count of transactions per borrower
+    txn_count = filtered.groupby('BORROWER_NAME').size().reset_index(name='TXN_COUNT')
+
+    # Normalize by months
+    txn_count['TXN_PER_MONTH'] = txn_count['TXN_COUNT'] / months_in_year
+
+    # Plot distribution
+    plt.figure(figsize=(10,6))
+    sns.histplot(txn_count['TXN_PER_MONTH'], bins=30, kde=True)
+    plt.title(f'Avg Monthly Transactions per Borrower ({code}, {year})')
+    plt.xlabel('Avg Monthly Transaction Count')
+    plt.ylabel('Number of Borrowers')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from ipywidgets import interact, widgets
+
 # Convert SNAPSHOT_DT to datetime
 df['SNAPSHOT_DT'] = pd.to_datetime(df['SNAPSHOT_DT'])
 
