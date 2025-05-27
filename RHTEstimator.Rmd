@@ -1,31 +1,19 @@
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from ipywidgets import interact, widgets
-
-# Ensure datetime and year column
-df['SNAPSHOT_DT'] = pd.to_datetime(df['SNAPSHOT_DT'])
-df['YEAR'] = df['SNAPSHOT_DT'].dt.year
-
-# Unique year options
-year_options = sorted(df['YEAR'].dropna().unique())
-
 @interact(year=widgets.Dropdown(options=year_options, description='Year'))
-def plot_avg_tran_amt_by_type(year):
-    # Filter by year
+def plot_avg_txn_count_by_type(year):
     filtered = df[df['YEAR'] == year]
+    months_in_year = filtered['SNAPSHOT_DT'].dt.month.nunique()
 
-    # Prepare subplot
     fig, axes = plt.subplots(1, 2, figsize=(14,6), sharey=True)
 
     for i, tx_type in enumerate(['Credit', 'Debit']):
         sub_df = filtered[filtered['CR_OR_DB_CODE'] == tx_type]
-        avg_amt = sub_df.groupby('BORROWER_NAME')['TRAN_AMT'].mean().reset_index()
+        txn_count = sub_df.groupby('BORROWER_NAME').size().reset_index(name='TXN_COUNT')
+        txn_count['TXN_PER_MONTH'] = txn_count['TXN_COUNT'] / months_in_year
 
-        sns.histplot(avg_amt['TRAN_AMT'], bins=30, kde=True, ax=axes[i])
-        axes[i].set_title(f'{tx_type} - Avg Transaction Amount ({year})')
-        axes[i].set_xlabel('Avg Transaction Amount')
-        axes[i].set_ylabel('Count of Borrowers')
+        sns.histplot(txn_count['TXN_PER_MONTH'], bins=30, kde=True, ax=axes[i])
+        axes[i].set_title(f'{tx_type} - Avg Monthly Transactions ({year})')
+        axes[i].set_xlabel('Avg Monthly Transactions')
+        axes[i].set_ylabel('Number of Borrowers')
         axes[i].grid(True)
 
     plt.tight_layout()
