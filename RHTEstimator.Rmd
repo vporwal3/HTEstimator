@@ -1,141 +1,82 @@
-Window ID
-Years (Quarterly)
-Economic / Credit Cycle Context
-Defaults Trend
-Why It’s Useful
-W1
-2002Q1 – 2005Q4
-Post-dot-com recovery; low growth but stabilizing corporate credit
-Rising but moderate defaults
-Baseline “normal” period; good contrast against later crises
-W2
-2006Q1 – 2009Q4
-Credit boom → Global Financial Crisis onset (2007–2008)
-Rising sharply by 2008–09
-Tests segmentation under pre-crisis and crisis entry conditions
-W3
-2010Q1 – 2013Q4
-Post-crisis high delinquencies; sluggish recovery
-Peak defaults (your chart shows ~900+)
-Ideal for showing strongest divergence in default risk behavior
-W4
-2014Q1 – 2017Q4
-Recovery phase, stable interest rates, strong credit quality
-Declining defaults
-Tests how segmentation performs in a low-risk period
-W5
-2018Q1 – 2021Q4
-COVID onset (2020), Fed rate cuts, government support programs
-Uptick in defaults (esp. 2020–21)
-Important for testing segmentation under stress but with policy distortion
-W6
-2022Q1 – 2024Q2
-Post-COVID tightening, inflation spike, aggressive Fed hikes
-Recent decline, but still elevated
-Useful to test segmentation as portfolio risk adjusts to rate hikes
-
-
-
-
-import pandas as pd
-import matplotlib.pyplot as plt
-
-# Step 1: Ensure 'prd_d' is datetime
-df['prd_d'] = pd.to_datetime(df['prd_d'])
-
-# Step 2: Extract year
-df['year'] = df['prd_d'].dt.year
-
-# Step 3: Count unique obligors per year
-active_obligors_per_year = df.groupby('year')['merged_src_ip_id'].nunique()
-
-# Step 4: Count unique defaults per year (flag = 1)
-defaults_per_year = (
-    df[df['CCAR_NON_ACCRL_FLAG'] == 1]
-    .groupby('year')['merged_src_ip_id']
-    .nunique()
-)
-
-# Step 5: Plot
-fig, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
-
-# Plot 1: Active obligors
-axes[0].bar(active_obligors_per_year.index, active_obligors_per_year.values, color='steelblue')
-axes[0].set_title('Number of Active Obligors per Year')
-axes[0].set_ylabel('Unique Obligors')
-axes[0].grid(axis='y')
-
-# Plot 2: Defaults per year
-axes[1].bar(defaults_per_year.index, defaults_per_year.values, color='darkorange')
-axes[1].set_title('Number of Defaults per Year')
-axes[1].set_xlabel('Year')
-axes[1].set_ylabel('Defaults')
-axes[1].grid(axis='y')
-
-plt.tight_layout()
-plt.show()
-
-
-
-
-
 import pandas as pd
 from scipy.stats import chi2_contingency
 
-# Step 1: Ensure 'prd_d' is datetime
-df['prd_d'] = pd.to_datetime(df['prd_d'])
+# Convert snapshot date and extract year
+agg_df['prd_d'] = pd.to_datetime(agg_df['prd_d'])
+agg_df['year'] = agg_df['prd_d'].dt.year
 
-# Step 2: Remove obligors whose **max commitment** is <= $500K
-max_commit_by_obligor = df.groupby('merged_src_ip_id')['commitments_amt'].max()
-low_exposure_obligors = max_commit_by_obligor[max_commit_by_obligor <= 500_000].index
-df = df[~df['merged_src_ip_id'].isin(low_exposure_obligors)]
+# Define 4-year rolling windows
+windows = [
+    (2002, 2005),
+    (2006, 2009),
+    (2010, 2013),
+    (2014, 2017),
+    (2018, 2021),
+    (2022, 2024),
+]
 
-# Step 3: Aggregate to obligor-date level (summing across facilities)
-agg_df = df.groupby(['merged_src_ip_id', 'prd_d']).agg({
-    'commitments_amt': 'sum',
-    'CCAR_NON_ACCRL_FLAG': 'max',
-    'MODELING_SEGMENT': lambda x: x.mode().iloc[0] if not x.mode().empty else x.iloc[0]
-}).reset_index()
+# Store results
+results = []
 
-# Step 4: Get first default date per obligor
-first_default = agg_df[agg_df['CCAR_NON_ACCRL_FLAG'] == 1].groupby('merged_src_ip_id')['prd_d'].min().reset_index()
-first_default.columns = ['merged_src_ip_id', 'first_default_date']
+for start_year, end_year in windows:
+    window_label = f"{start_year}-{end_year}"
+    
+    # Filter for T₀ candidates within window
+    window_data = agg_df[(agg_df['year'] >= start_year) & (agg_df['year'] <= end_year)]
+    
+    # Get first snapshot in window per obligor
+    t0_df = window_data.sort_values('prd_d').groupby('merged_src_ip_id').first().reset_index()
+    
+    # Create 12-month future window for default tracking
+    t0_dates = t0_df[['merged_src_ip_id', 'prd_d']]
+    outcome_data = agg_df[['merged_src_ip_id', 'prd_d', 'CCAR_NON_ACCRL_FLAG']].copy()
+    
+    # Merge for tracking default after T₀
+    merged = t0_dates.merge(outcome_data, on='merged_src_ip_id', how='left', suffixes=('', '_event'))
+    merged['months_after_t0'] = (merged['prd_d_event'] - merged['prd_d']).dt.days / 30
 
-# Step 5: Merge first default date back into the data
-agg_df = agg_df.merge(first_default, on='merged_src_ip_id', how='left')
+    # Identify default in next 12 months
+    future_defaults = merged[(merged['months_after_t0'] > 0) & (merged['months_after_t0'] <= 12)]
+    default_flag = future_defaults.groupby('merged_src_ip_id')['CCAR_NON_ACCRL_FLAG'].max().reset_index()
+    default_flag.columns = ['merged_src_ip_id', 'default_within_12m']
 
-# Step 6: Select commitment amount snapshot at or before default (or latest if no default)
-def get_snapshot_before_default(group):
-    default_date = group['first_default_date'].iloc[0]
-    if pd.notna(default_date):
-        eligible = group[group['prd_d'] <= default_date]
-        if not eligible.empty:
-            return eligible.sort_values('prd_d').iloc[-1]
-    return group.sort_values('prd_d').iloc[-1]
+    # Merge default flag into T₀ dataset
+    analysis_df = t0_df.merge(default_flag, on='merged_src_ip_id', how='left')
+    analysis_df['default_within_12m'] = analysis_df['default_within_12m'].fillna(0).astype(int)
 
-collapsed_df = agg_df.groupby('merged_src_ip_id').apply(get_snapshot_before_default).reset_index(drop=True)
+    # Create commitment-based segment
+    analysis_df['commitment_segment'] = analysis_df['commitments_amt'].apply(
+        lambda x: '<=3MM' if x <= 3_000_000 else '>3MM'
+    )
 
-# Step 7: Flag whether obligor ever defaulted
-collapsed_df['ever_default'] = collapsed_df['first_default_date'].notna().astype(int)
+    # Chi-squared test: commitment segment vs default
+    cont_commit = pd.crosstab(analysis_df['commitment_segment'], analysis_df['default_within_12m'])
+    if cont_commit.shape == (2, 2):
+        chi2_cmt, p_cmt, _, _ = chi2_contingency(cont_commit)
+    else:
+        chi2_cmt, p_cmt = None, None
 
-# Step 8: Define commitment-based segmentation
-collapsed_df['commitment_segment'] = collapsed_df['commitments_amt'].apply(lambda x: '<=3MM' if x <= 3_000_000 else '>3MM')
+    # Chi-squared test: modeling segment vs default
+    cont_modeling = pd.crosstab(analysis_df['MODELING_SEGMENT'], analysis_df['default_within_12m'])
+    if cont_modeling.shape[1] == 2:
+        chi2_seg, p_seg, _, _ = chi2_contingency(cont_modeling)
+    else:
+        chi2_seg, p_seg = None, None
 
-# Step 9: Run Chi-squared test on commitment-based segmentation
-contingency_commitment = pd.crosstab(collapsed_df['commitment_segment'], collapsed_df['ever_default'])
-chi2_cmt, p_cmt, _, _ = chi2_contingency(contingency_commitment)
+    # Store results
+    results.append({
+        'window': window_label,
+        'num_obligors': len(analysis_df),
+        'num_defaults': analysis_df['default_within_12m'].sum(),
+        'commitment_chi2': chi2_cmt,
+        'commitment_p': p_cmt,
+        'modeling_chi2': chi2_seg,
+        'modeling_p': p_seg
+    })
 
-# Step 10: Run Chi-squared test on legacy modeling segments
-contingency_legacy = pd.crosstab(collapsed_df['MODELING_SEGMENT'], collapsed_df['ever_default'])
-chi2_seg, p_seg, _, _ = chi2_contingency(contingency_legacy)
+# Save results to CSV
+results_df = pd.DataFrame(results)
+results_df.to_csv("segmentation_rolling_window_results.csv", index=False)
 
-# Step 11: Output Results
-print("==== Chi-squared Test Results ====")
-
-print("\nCommitment-Based Segmentation:")
-print(contingency_commitment)
-print(f"Chi-squared = {chi2_cmt:.3f}, p-value = {p_cmt:.4f}")
-
-print("\nLegacy Segment-Based (MODELING_SEGMENT):")
-print(contingency_legacy)
-print(f"Chi-squared = {chi2_seg:.3f}, p-value = {p_seg:.4f}")
+# Optional: display results
+print(results_df)
