@@ -1,3 +1,14 @@
+
+agg_df = df.groupby(['merged_src_ip_id', 'prd_d']).agg({
+    'commitments_amt': 'sum',  # total commitments across facilities
+    'CCAR_NON_ACCRL_FLAG': 'max',  # default if any facility defaults
+    'MODELING_SEGMENT': lambda x: x.mode().iloc[0] if not x.mode().empty else x.iloc[0],
+    'RISK_RATING': 'mean',  # or mode or first if ordinal
+    'outstandings_amt': 'sum',  # total outstandings across facilities
+    'day_past_due': 'mean',  # or max depending on business logic
+    'int_rate_apr': 'mean'  # average interest rate
+}).reset_index()
+
 import pandas as pd
 from scipy.stats import mannwhitneyu
 
