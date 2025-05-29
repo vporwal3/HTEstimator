@@ -1,114 +1,47 @@
-Hi Jordan,
-
-I hope you’re doing well. Gang may have already mentioned this, but I just wanted to let you know that I’ve been temporarily reassigned to another project focused on the Commercial C&I default model through September.
-
-I wanted to check in and see if there’s someone who will be taking over my line items in the meantime, or if there’s a plan in place for how we’d like to handle them during this period.
-
-Please let me know how you’d like to proceed. Happy to assist with the transition as needed.
-
-
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from ipywidgets import interact, widgets
+from scipy.stats import chi2_contingency
 
-# --- Data Preprocessing ---
-df['SNAPSHOT_DT'] = pd.to_datetime(df['SNAPSHOT_DT'])
-df['YEAR'] = df['SNAPSHOT_DT'].dt.year
-df['MONTH'] = df['SNAPSHOT_DT'].dt.month
-df['QUARTER'] = df['SNAPSHOT_DT'].dt.to_period('Q')
+# Step 1: Ensure prd_d is datetime
+df['prd_d'] = pd.to_datetime(df['prd_d'])
 
-# Define pandemic era
-def classify_pandemic_era(date):
-    quarter = date.to_period('Q')
-    if quarter >= pd.Period('2018Q1') and quarter <= pd.Period('2019Q4'):
-        return 'Pre-Pandemic'
-    elif quarter >= pd.Period('2020Q1') and quarter <= pd.Period('2022Q4'):
-        return 'Pandemic'
-    elif quarter >= pd.Period('2023Q1'):
-        return 'Post-Pandemic'
-    else:
-        return 'Other'
+# Step 2: Get first default date per obligor
+first_default = df[df['CCAR_NON_ACCRL_FLAG'] == 1].groupby('merged_src_ip_id')['prd_d'].min().reset_index()
+first_default.columns = ['merged_src_ip_id', 'first_default_date']
 
-df['PANDEMIC_ERA'] = df['SNAPSHOT_DT'].apply(classify_pandemic_era)
+# Step 3: Merge first default date back to main DataFrame
+df = df.merge(first_default, on='merged_src_ip_id', how='left')
 
-# --- Filter Dropdowns ---
-year_options = sorted(df['YEAR'].dropna().unique())
-category_options = ['All'] + sorted(df['HIGH_LVL_CATEGORY_DESC'].dropna().unique())
+# Step 4: Select commitment amount as of default or latest prior
+def get_commitment_snapshot(group):
+    default_date = group['first_default_date'].iloc[0]
+    if pd.notna(default_date):
+        eligible = group[group['prd_d'] <= default_date]
+        if not eligible.empty:
+            return eligible.sort_values('prd_d').iloc[-1]
+    return group.sort_values('prd_d').iloc[-1]
 
-# --- Plot 1: Avg Transaction Amount per Borrower ---
-@interact(
-    year=widgets.Dropdown(options=year_options, description='Year'),
-    category=widgets.Dropdown(options=category_options, description='Category')
-)
-def plot_avg_tran_amt_by_category(year, category):
-    filtered = df[df['YEAR'] == year]
-    if category != 'All':
-        filtered = filtered[filtered['HIGH_LVL_CATEGORY_DESC'] == category]
+collapsed_df = df.groupby('merged_src_ip_id').apply(get_commitment_snapshot).reset_index(drop=True)
 
-    fig, axes = plt.subplots(1, 2, figsize=(14,6), sharey=True)
-    for i, tx_type in enumerate(['Credit', 'Debit']):
-        sub_df = filtered[filtered['CR_OR_DB_CODE'] == tx_type]
-        avg_amt = sub_df.groupby('BORROWER_NAME')['TRAN_AMT'].mean().reset_index()
+# Step 5: Create ever default flag
+collapsed_df['ever_default'] = collapsed_df['first_default_date'].notna().astype(int)
 
-        sns.histplot(avg_amt['TRAN_AMT'], bins=30, kde=True, ax=axes[i])
-        axes[i].set_title(f'{tx_type} - Avg Transaction Amount ({year})')
-        axes[i].set_xlabel('Avg Transaction Amount')
-        axes[i].set_ylabel('Count of Borrowers')
-        axes[i].grid(True)
+# Step 6: Assign commitment-based segmentation
+collapsed_df['commitment_segment'] = collapsed_df['commitments_amt'].apply(lambda x: '<=3MM' if x <= 3_000_000 else '>3MM')
 
-    plt.tight_layout()
-    plt.show()
+# Step 7: Chi-squared test for commitment-based segmentation
+contingency_commitment = pd.crosstab(collapsed_df['commitment_segment'], collapsed_df['ever_default'])
+chi2_cmt, p_cmt, _, _ = chi2_contingency(contingency_commitment)
 
-# --- Plot 2: Avg Monthly Transaction Count per Borrower ---
-@interact(
-    year=widgets.Dropdown(options=year_options, description='Year'),
-    category=widgets.Dropdown(options=category_options, description='Category')
-)
-def plot_avg_txn_count_by_category(year, category):
-    filtered = df[df['YEAR'] == year]
-    if category != 'All':
-        filtered = filtered[filtered['HIGH_LVL_CATEGORY_DESC'] == category]
+# Step 8: Chi-squared test for MODELING_SEGMENT (legacy method)
+contingency_legacy = pd.crosstab(collapsed_df['MODELING_SEGMENT'], collapsed_df['ever_default'])
+chi2_seg, p_seg, _, _ = chi2_contingency(contingency_legacy)
 
-    months_in_year = filtered['MONTH'].nunique()
-    fig, axes = plt.subplots(1, 2, figsize=(14,6), sharey=True)
+# Step 9: Print Results
+print("==== Chi-squared Test Results ====")
+print("\nCommitment-Based Segmentation:")
+print(contingency_commitment)
+print(f"Chi-squared = {chi2_cmt:.3f}, p-value = {p_cmt:.4f}")
 
-    for i, tx_type in enumerate(['Credit', 'Debit']):
-        sub_df = filtered[filtered['CR_OR_DB_CODE'] == tx_type]
-        txn_count = sub_df.groupby('BORROWER_NAME').size().reset_index(name='TXN_COUNT')
-        txn_count['TXN_PER_MONTH'] = txn_count['TXN_COUNT'] / months_in_year
-
-        sns.histplot(txn_count['TXN_PER_MONTH'], bins=30, kde=True, ax=axes[i])
-        axes[i].set_title(f'{tx_type} - Avg Monthly Transactions ({year})')
-        axes[i].set_xlabel('Avg Monthly Transactions')
-        axes[i].set_ylabel('Number of Borrowers')
-        axes[i].grid(True)
-
-    plt.tight_layout()
-    plt.show()
-
-# --- Plot 3: Borrower-Level Transaction Amounts by Pandemic Era ---
-borrower_era_stats = df.groupby(['BORROWER_NAME', 'PANDEMIC_ERA']).agg(
-    txn_count=('TRAN_AMT', 'count'),
-    avg_amt=('TRAN_AMT', 'mean'),
-    total_amt=('TRAN_AMT', 'sum')
-).reset_index()
-
-plt.figure(figsize=(10,6))
-sns.violinplot(data=borrower_era_stats, x='PANDEMIC_ERA', y='avg_amt', inner='box')
-plt.title('Avg Transaction Amount per Borrower Across Pandemic Eras')
-plt.xlabel('Pandemic Era')
-plt.ylabel('Avg Transaction Amount')
-plt.grid(True)
-plt.tight_layout()
-plt.show()
-
-# --- Optional: Summary Table ---
-summary = df.groupby('PANDEMIC_ERA').agg(
-    total_transactions=('TRAN_AMT', 'count'),
-    total_amount=('TRAN_AMT', 'sum'),
-    avg_transaction_amt=('TRAN_AMT', 'mean'),
-    unique_borrowers=('BORROWER_NAME', 'nunique')
-).reset_index()
-
-print(summary)
+print("\nLegacy Segment-Based (MODELING_SEGMENT):")
+print(contingency_legacy)
+print(f"Chi-squared = {chi2_seg:.3f}, p-value = {p_seg:.4f}")
