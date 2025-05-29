@@ -1,127 +1,90 @@
-import re
+Perfect — you’re breaking this down exactly the way Model Risk, Credit Policy, or Senior Modeling leads would expect. Below is a suggested slide-by-slide breakdown (titles + bullet content) for presenting your rolling window Chi-squared segmentation analysis methodically and convincingly.
 
-substrings_to_find = ['SALE', 'RETURN', 'CHGBCK']
-regex_pattern = '|'.join(re.escape(s) for s in substrings_to_find)
+⸻
 
-# Use list comprehension to get matching columns
-matched_columns_list = [col for col in base.columns if re.search(regex_pattern, col, re.IGNORECASE)]
+📊 Slide 1: Objective of Segmentation Justification
 
+Title: Justifying Segmentation Strategy for PD Modeling
 
-import pandas as pd
+Content:
+	•	Goal: Demonstrate that commitment-based segmentation (≤3MM vs >3MM) is statistically meaningful
+	•	Compare against legacy segmentation (e.g., MM, Institutional, Leasing)
+	•	Use rigorous hypothesis testing to support model governance and validation
 
-# Ensure prd_d is datetime
-df['prd_d'] = pd.to_datetime(df['prd_d'])
+⸻
 
-# Columns to bin
-feature_cols = ['x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7']
-special_code = -999
+⚖️ Slide 2: Statistical Test Used
 
-# Assign special code to features where prd_d < 2020
-df.loc[df['prd_d'].dt.year < 2020, feature_cols] = special_code
+Title: Why Use a Chi-Squared Test?
 
-t0_df = window_data.sort_values('prd_d').groupby('merged_src_ip_id').first().reset_index()
-t0_df = t0_df[t0_df['commitments_amt'] > 500_000]  # Apply the filter here
+Content:
+	•	Hypothesis:
+	•	Null (H₀): Default rates are the same across segments
+	•	Alternative (H₁): Default rates differ across segments
+	•	Chi-squared test is ideal for:
+	•	Binary outcomes (default vs no-default)
+	•	Categorical grouping (e.g., commitment segment or legacy segment)
+	•	Requires a 2x2 contingency table:
+	•	Rows: Segment groups (e.g., ≤3MM vs >3MM)
+	•	Columns: Default = 1 or 0
 
+⸻
 
-agg_df = df.groupby(['merged_src_ip_id', 'prd_d']).agg({
-    'commitments_amt': 'sum',  # total commitments across facilities
-    'CCAR_NON_ACCRL_FLAG': 'max',  # default if any facility defaults
-    'MODELING_SEGMENT': lambda x: x.mode().iloc[0] if not x.mode().empty else x.iloc[0],
-    'RISK_RATING': 'mean',  # or mode or first if ordinal
-    'outstandings_amt': 'sum',  # total outstandings across facilities
-    'day_past_due': 'mean',  # or max depending on business logic
-    'int_rate_apr': 'mean'  # average interest rate
-}).reset_index()
+📦 Slide 3: Why Collapse to One Row per Obligor?
 
-import pandas as pd
-from scipy.stats import mannwhitneyu
+Title: Panel Data Must Be Collapsed to Avoid Bias
 
-# ----------------------------------------
-# STEP 1: PREPROCESSING
-# ----------------------------------------
+Content:
+	•	Raw data is at obligor × time (panel) level
+	•	Chi-squared test assumes independent observations
+	•	Including multiple records per obligor would:
+	•	Inflate sample size
+	•	Violate independence assumption
+	•	Overstate significance
+	•	Solution: Create 1 row per obligor, capturing their:
+	•	First observed features (T₀)
+	•	Default outcome (e.g., within 12 months of T₀)
 
-def preprocess(df):
-    # Convert 'Y'/'N' flag to binary
-    df = df.copy()
-    df['CCAR_NON_ACCRL_FLAG'] = df['CCAR_NON_ACCRL_FLAG'].map({'Y': 1, 'N': 0})
-    df['prd_d'] = pd.to_datetime(df['prd_d'])
-    return df
+⸻
 
-# ----------------------------------------
-# STEP 2: CREATE T₀ SNAPSHOT PER OBLIGOR
-# ----------------------------------------
+⏳ Slide 4: Why Use a Rolling Window?
 
-def create_t0_snapshot(df):
-    df_sorted = df.sort_values(['merged_src_ip_id', 'prd_d'])
-    t0_df = df_sorted.groupby('merged_src_ip_id').first().reset_index()
-    return t0_df
+Title: Rolling Windows Capture Economic Variation
 
-# ----------------------------------------
-# STEP 3: LABEL DEFAULT WITHIN 12 MONTHS
-# ----------------------------------------
+Content:
+	•	Default behavior is time-dependent (e.g., pre vs post-COVID)
+	•	Splitting data into time windows lets us:
+	•	Control for macroeconomic effects
+	•	Compare how segmentation performs in different cycles
+	•	Prevents one “bad year” from dominating full-sample results
+	•	Increases transparency and robustness
 
-def label_default_within_12m(df, t0_df):
-    df_merged = df.merge(
-        t0_df[['merged_src_ip_id', 'prd_d']],
-        on='merged_src_ip_id',
-        how='left',
-        suffixes=('', '_t0')
-    )
-    df_merged['within_12m'] = (
-        (df_merged['prd_d'] > df_merged['prd_d_t0']) &
-        (df_merged['prd_d'] <= df_merged['prd_d_t0'] + pd.DateOffset(months=12))
-    )
-    default_within_window = (
-        df_merged[df_merged['within_12m']]
-        .groupby('merged_src_ip_id')['CCAR_NON_ACCRL_FLAG']
-        .max()
-        .reset_index()
-        .rename(columns={'CCAR_NON_ACCRL_FLAG': 'default_within_12m'})
-    )
-    return t0_df.merge(default_within_window, on='merged_src_ip_id', how='left').fillna({'default_within_12m': 0})
+⸻
 
-# ----------------------------------------
-# STEP 4: SEGMENT COMMITMENTS AND RUN TESTS
-# ----------------------------------------
+🔄 Slide 5: Rolling Window Methodology
 
-def run_segment_tests(agg_df, variable_list):
-    agg_df = agg_df.copy()
-    agg_df['commitment_segment'] = agg_df['commitments_amt'].apply(lambda x: '≤3MM' if x <= 3_000_000 else '>3MM')
-    result_rows = []
+Title: How the Rolling Window Method Works
 
-    for var in variable_list:
-        group1 = agg_df[agg_df['commitment_segment'] == '≤3MM'][var].dropna()
-        group2 = agg_df[agg_df['commitment_segment'] == '>3MM'][var].dropna()
+Content:
+	•	Step 1: Define rolling 4-year windows (e.g., 2010–2013, 2014–2017)
+	•	Step 2: For each obligor, select first snapshot (T₀) within that window
+	•	Step 3: Track if obligor defaulted within 12 months
+	•	Step 4: Build contingency table by segment vs default
+	•	Step 5: Run Chi-squared tests for:
+	•	Commitment segmentation
+	•	Legacy segmentation
+	•	Repeat steps for each window and compare test statistics
 
-        # Mann–Whitney U Test (non-parametric)
-        stat, p = mannwhitneyu(group1, group2, alternative='two-sided')
-        result_rows.append({
-            'Variable': var,
-            '≤3MM Mean': round(group1.mean(), 2),
-            '>3MM Mean': round(group2.mean(), 2),
-            'Test': 'Mann–Whitney U',
-            'p-value': round(p, 5),
-            'Significant (<0.05)?': '✅' if p < 0.05 else '❌'
-        })
+⸻
 
-    return pd.DataFrame(result_rows)
+📈 (Optional Next Slide: Visualization Preview)
 
-# ----------------------------------------
-# FULL PIPELINE FUNCTION
-# ----------------------------------------
+Title: Preview: Statistical Power Across Windows
 
-def process_commitment_segmentation(df):
-    df_clean = preprocess(df)
-    t0_df = create_t0_snapshot(df_clean)
-    agg_df = label_default_within_12m(df_clean, t0_df)
-    variable_list = ['RISK_RATING', 'outstandings_amt', 'day_past_due', 'int_rate_apr']
-    results_df = run_segment_tests(agg_df, variable_list)
-    return agg_df, results_df
+Content (placeholder for next slides):
+	•	Chi-squared statistic across time shows which segmentation better separates default behavior
+	•	Helps determine if commitment cutoff is stable and meaningful
 
-# ----------------------------------------
-# USAGE EXAMPLE (after loading your data)
-# ----------------------------------------
+⸻
 
-# df = pd.read_csv("your_panel_data.csv")
-# agg_df, results_df = process_commitment_segmentation(df)
-# print(results_df)
+Let me know if you’d like these as a PowerPoint file or formatted markdown/LaTeX for internal decks. We can proceed to the results interpretation slides next.
