@@ -1,41 +1,79 @@
-import pandas as pd
-import matplotlib.pyplot as plt
+🧠 The Core Problem
 
-# Load results
-cutoff_results = pd.read_csv("segmentation_cutoff_comparison.csv")
+You have panel data: multiple time-indexed records per obligor, each with exposure and default flag.
 
-# Convert cutoff column to string for easier plotting
-cutoff_results['cutoff_str'] = cutoff_results['cutoff'].apply(lambda x: f"≤{int(x/1_000_000)}MM")
+But you’re trying to test a relationship between a segmentation rule (like commitment size ≤3MM) and default behavior.
 
-# Plot chi-squared comparison across windows for each cutoff
-plt.figure(figsize=(12, 6))
+To do this rigorously, you need to ensure that:
+	•	Your exposure variable (e.g. commitment amount) reflects the obligor’s state before default.
+	•	You’re not leaking future information or biasing test assumptions (e.g., independence).
 
-# Plot line per cutoff
-for cutoff in sorted(cutoff_results['cutoff'].unique()):
-    subset = cutoff_results[cutoff_results['cutoff'] == cutoff]
-    plt.plot(subset['window'], subset['chi2_stat'], marker='o', label=f'Cutoff ≤{int(cutoff/1_000_000)}MM')
+⸻
 
-plt.title('Chi-Squared Comparison Across Commitment Cutoffs')
-plt.xlabel('Rolling Window')
-plt.ylabel('Chi-Squared Statistic')
-plt.legend(title='Commitment Cutoff')
-plt.grid(True)
-plt.xticks(rotation=45)
-plt.tight_layout()
-plt.show()
+🟩 Why Rolling Window Works Best
 
-# Optional: P-value plot
-plt.figure(figsize=(12, 6))
-for cutoff in sorted(cutoff_results['cutoff'].unique()):
-    subset = cutoff_results[cutoff_results['cutoff'] == cutoff]
-    plt.plot(subset['window'], subset['p_value'], marker='s', label=f'Cutoff ≤{int(cutoff/1_000_000)}MM')
+✅ 1. Aligns Time Properly
 
-plt.axhline(0.05, color='red', linestyle='--', label='Significance Threshold (0.05)')
-plt.title('P-Value Comparison Across Commitment Cutoffs')
-plt.xlabel('Rolling Window')
-plt.ylabel('P-Value')
-plt.legend(title='Commitment Cutoff')
-plt.grid(True)
-plt.xticks(rotation=45)
-plt.tight_layout()
-plt.show()
+Each obligor is assigned a fixed “T₀ snapshot”, based on the first date in a rolling window.
+	•	Their exposure variables (e.g., commitment, rating) come from this snapshot
+	•	Then you track future default behavior over 12 months
+
+This mirrors how segmentation would work in production:
+
+Segment obligors using information available at time T, then predict defaults in T+1 to T+12.
+
+⸻
+
+✅ 2. Prevents Lookahead Bias
+
+Unlike taking:
+	•	the max commitment ever (which may occur after default),
+	•	or the snapshot closest to default (which violates timing),
+
+the rolling method ensures:
+
+You’re only using variables observed before the outcome occurred.
+
+That’s critical for statistical validity.
+
+⸻
+
+✅ 3. Enforces Independence
+
+By selecting one snapshot per obligor per window, you avoid having the same obligor contribute multiple rows (and correlated errors) to a test like Chi-squared.
+
+This upholds the test assumption that:
+
+Each row is an independent Bernoulli trial (default or no default).
+
+⸻
+
+✅ 4. Balances Time Coverage and Signal
+
+Instead of arbitrarily choosing one date across all obligors, the rolling windows let you:
+	•	Cover different economic regimes (pre-crisis, crisis, recovery)
+	•	Aggregate data into meaningful cohorts
+	•	Avoid picking a weird or unrepresentative point in time
+
+⸻
+
+🔴 Why Other Approaches Are Problematic
+
+🚫 All Snapshots (multiple records per obligor)
+	•	Violates test assumption of independence
+	•	Inflates sample size → overstates statistical significance
+	•	Defaults can be counted multiple times (before and after they actually occurred)
+
+⸻
+
+🚫 Closest to Default for Defaulters, Max for Non-defaulters
+	•	Temporal inconsistency — you’re comparing different time horizons
+	•	May bias variable distributions (e.g., commitment could have increased just before default)
+	•	Hard to interpret from a modeling standpoint
+
+⸻
+
+🚫 Single Arbitrary Snapshot
+	•	Choosing 1 quarter (e.g., 2012Q4) loses a ton of data
+	•	May not be representative of credit cycle
+	•	Reduces power, creates sample bias
