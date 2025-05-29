@@ -1,3 +1,15 @@
+Other Approaches (and Their Drawbacks):
+
+🔹 1. Single Arbitrary Snapshot (e.g., 2020 Q1)
+	•	❌ May exclude obligors that became active later
+	•	❌ Does not generalize across economic regimes
+
+🔹 2. Snapshot Closest to Default for Defaulters, Max Commitment for Non-Defaulters
+	•	❌ Violates time consistency — you’re comparing pre-default vs post-default behavior
+	•	❌ Biased: exposure values are taken from different reference points depending on the outcome
+(makes the test invalid — you’re “peeking into the future”)
+
+
 Perfect — you’re breaking this down exactly the way Model Risk, Credit Policy, or Senior Modeling leads would expect. Below is a suggested slide-by-slide breakdown (titles + bullet content) for presenting your rolling window Chi-squared segmentation analysis methodically and convincingly.
 
 ⸻
