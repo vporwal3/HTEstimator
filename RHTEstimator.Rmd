@@ -1,79 +1,92 @@
-🧠 The Core Problem
+import pandas as pd
+from scipy.stats import mannwhitneyu
 
-You have panel data: multiple time-indexed records per obligor, each with exposure and default flag.
+# ----------------------------------------
+# STEP 1: PREPROCESSING
+# ----------------------------------------
 
-But you’re trying to test a relationship between a segmentation rule (like commitment size ≤3MM) and default behavior.
+def preprocess(df):
+    # Convert 'Y'/'N' flag to binary
+    df = df.copy()
+    df['CCAR_NON_ACCRL_FLAG'] = df['CCAR_NON_ACCRL_FLAG'].map({'Y': 1, 'N': 0})
+    df['prd_d'] = pd.to_datetime(df['prd_d'])
+    return df
 
-To do this rigorously, you need to ensure that:
-	•	Your exposure variable (e.g. commitment amount) reflects the obligor’s state before default.
-	•	You’re not leaking future information or biasing test assumptions (e.g., independence).
+# ----------------------------------------
+# STEP 2: CREATE T₀ SNAPSHOT PER OBLIGOR
+# ----------------------------------------
 
-⸻
+def create_t0_snapshot(df):
+    df_sorted = df.sort_values(['merged_src_ip_id', 'prd_d'])
+    t0_df = df_sorted.groupby('merged_src_ip_id').first().reset_index()
+    return t0_df
 
-🟩 Why Rolling Window Works Best
+# ----------------------------------------
+# STEP 3: LABEL DEFAULT WITHIN 12 MONTHS
+# ----------------------------------------
 
-✅ 1. Aligns Time Properly
+def label_default_within_12m(df, t0_df):
+    df_merged = df.merge(
+        t0_df[['merged_src_ip_id', 'prd_d']],
+        on='merged_src_ip_id',
+        how='left',
+        suffixes=('', '_t0')
+    )
+    df_merged['within_12m'] = (
+        (df_merged['prd_d'] > df_merged['prd_d_t0']) &
+        (df_merged['prd_d'] <= df_merged['prd_d_t0'] + pd.DateOffset(months=12))
+    )
+    default_within_window = (
+        df_merged[df_merged['within_12m']]
+        .groupby('merged_src_ip_id')['CCAR_NON_ACCRL_FLAG']
+        .max()
+        .reset_index()
+        .rename(columns={'CCAR_NON_ACCRL_FLAG': 'default_within_12m'})
+    )
+    return t0_df.merge(default_within_window, on='merged_src_ip_id', how='left').fillna({'default_within_12m': 0})
 
-Each obligor is assigned a fixed “T₀ snapshot”, based on the first date in a rolling window.
-	•	Their exposure variables (e.g., commitment, rating) come from this snapshot
-	•	Then you track future default behavior over 12 months
+# ----------------------------------------
+# STEP 4: SEGMENT COMMITMENTS AND RUN TESTS
+# ----------------------------------------
 
-This mirrors how segmentation would work in production:
+def run_segment_tests(agg_df, variable_list):
+    agg_df = agg_df.copy()
+    agg_df['commitment_segment'] = agg_df['commitments_amt'].apply(lambda x: '≤3MM' if x <= 3_000_000 else '>3MM')
+    result_rows = []
 
-Segment obligors using information available at time T, then predict defaults in T+1 to T+12.
+    for var in variable_list:
+        group1 = agg_df[agg_df['commitment_segment'] == '≤3MM'][var].dropna()
+        group2 = agg_df[agg_df['commitment_segment'] == '>3MM'][var].dropna()
 
-⸻
+        # Mann–Whitney U Test (non-parametric)
+        stat, p = mannwhitneyu(group1, group2, alternative='two-sided')
+        result_rows.append({
+            'Variable': var,
+            '≤3MM Mean': round(group1.mean(), 2),
+            '>3MM Mean': round(group2.mean(), 2),
+            'Test': 'Mann–Whitney U',
+            'p-value': round(p, 5),
+            'Significant (<0.05)?': '✅' if p < 0.05 else '❌'
+        })
 
-✅ 2. Prevents Lookahead Bias
+    return pd.DataFrame(result_rows)
 
-Unlike taking:
-	•	the max commitment ever (which may occur after default),
-	•	or the snapshot closest to default (which violates timing),
+# ----------------------------------------
+# FULL PIPELINE FUNCTION
+# ----------------------------------------
 
-the rolling method ensures:
+def process_commitment_segmentation(df):
+    df_clean = preprocess(df)
+    t0_df = create_t0_snapshot(df_clean)
+    agg_df = label_default_within_12m(df_clean, t0_df)
+    variable_list = ['RISK_RATING', 'outstandings_amt', 'day_past_due', 'int_rate_apr']
+    results_df = run_segment_tests(agg_df, variable_list)
+    return agg_df, results_df
 
-You’re only using variables observed before the outcome occurred.
+# ----------------------------------------
+# USAGE EXAMPLE (after loading your data)
+# ----------------------------------------
 
-That’s critical for statistical validity.
-
-⸻
-
-✅ 3. Enforces Independence
-
-By selecting one snapshot per obligor per window, you avoid having the same obligor contribute multiple rows (and correlated errors) to a test like Chi-squared.
-
-This upholds the test assumption that:
-
-Each row is an independent Bernoulli trial (default or no default).
-
-⸻
-
-✅ 4. Balances Time Coverage and Signal
-
-Instead of arbitrarily choosing one date across all obligors, the rolling windows let you:
-	•	Cover different economic regimes (pre-crisis, crisis, recovery)
-	•	Aggregate data into meaningful cohorts
-	•	Avoid picking a weird or unrepresentative point in time
-
-⸻
-
-🔴 Why Other Approaches Are Problematic
-
-🚫 All Snapshots (multiple records per obligor)
-	•	Violates test assumption of independence
-	•	Inflates sample size → overstates statistical significance
-	•	Defaults can be counted multiple times (before and after they actually occurred)
-
-⸻
-
-🚫 Closest to Default for Defaulters, Max for Non-defaulters
-	•	Temporal inconsistency — you’re comparing different time horizons
-	•	May bias variable distributions (e.g., commitment could have increased just before default)
-	•	Hard to interpret from a modeling standpoint
-
-⸻
-
-🚫 Single Arbitrary Snapshot
-	•	Choosing 1 quarter (e.g., 2012Q4) loses a ton of data
-	•	May not be representative of credit cycle
-	•	Reduces power, creates sample bias
+# df = pd.read_csv("your_panel_data.csv")
+# agg_df, results_df = process_commitment_segmentation(df)
+# print(results_df)
