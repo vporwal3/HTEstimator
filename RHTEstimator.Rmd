@@ -1,3 +1,11 @@
+import re
+
+substrings_to_find = ['SALE', 'RETURN', 'CHGBCK']
+regex_pattern = '|'.join(re.escape(s) for s in substrings_to_find)
+
+# Use list comprehension to get matching columns
+matched_columns_list = [col for col in base.columns if re.search(regex_pattern, col, re.IGNORECASE)]
+
 
 import pandas as pd
 
