@@ -1,4 +1,39 @@
 import pandas as pd
+import matplotlib.pyplot as plt
+
+# Load results
+results_df = pd.read_csv('segmentation_rolling_window_results.csv')
+
+# Compare chi-squared values
+plt.figure(figsize=(12, 6))
+plt.plot(results_df['window'], results_df['commitment_chi2'], marker='o', label='Commitment Segment')
+plt.plot(results_df['window'], results_df['modeling_chi2'], marker='s', label='Legacy Segment')
+plt.title('Chi-Squared Comparison by Segmentation Strategy')
+plt.xlabel('Rolling Window')
+plt.ylabel('Chi-Squared Statistic')
+plt.legend()
+plt.grid(True)
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+# Plot p-values
+plt.figure(figsize=(12, 6))
+plt.plot(results_df['window'], results_df['commitment_p'], marker='o', label='Commitment Segment')
+plt.plot(results_df['window'], results_df['modeling_p'], marker='s', label='Legacy Segment')
+plt.title('P-Value Comparison by Segmentation Strategy')
+plt.xlabel('Rolling Window')
+plt.ylabel('P-Value')
+plt.axhline(0.05, color='red', linestyle='--', label='Significance Threshold (0.05)')
+plt.legend()
+plt.grid(True)
+plt.xticks(rotation=45)
+plt.tight_layout()
+plt.show()
+
+
+
+import pandas as pd
 from scipy.stats import chi2_contingency
 
 # Convert snapshot date and extract year
