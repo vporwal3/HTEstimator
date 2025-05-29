@@ -1,21 +1,28 @@
-# Step 1: Ensure datetime format
+import pandas as pd
+from scipy.stats import chi2_contingency
+
+# Step 1: Ensure 'prd_d' is datetime
 df['prd_d'] = pd.to_datetime(df['prd_d'])
 
-# Step 2: Aggregate to obligor-date level (roll up facility-level data)
+# Step 2: Remove obligors with any negative or zero commitment values
+bad_obligors = df[df['commitments_amt'] <= 0]['merged_src_ip_id'].unique()
+df = df[~df['merged_src_ip_id'].isin(bad_obligors)]
+
+# Step 3: Aggregate to obligor-date level (summing across facilities)
 agg_df = df.groupby(['merged_src_ip_id', 'prd_d']).agg({
     'commitments_amt': 'sum',
     'CCAR_NON_ACCRL_FLAG': 'max',
     'MODELING_SEGMENT': lambda x: x.mode().iloc[0] if not x.mode().empty else x.iloc[0]
 }).reset_index()
 
-# Step 3: Get first default date per obligor
+# Step 4: Get first default date per obligor
 first_default = agg_df[agg_df['CCAR_NON_ACCRL_FLAG'] == 1].groupby('merged_src_ip_id')['prd_d'].min().reset_index()
 first_default.columns = ['merged_src_ip_id', 'first_default_date']
 
-# Step 4: Merge back to main data
+# Step 5: Merge first default date back into the data
 agg_df = agg_df.merge(first_default, on='merged_src_ip_id', how='left')
 
-# Step 5: Get commitment snapshot at or before default
+# Step 6: Select commitment amount snapshot at or before default (or latest if no default)
 def get_snapshot_before_default(group):
     default_date = group['first_default_date'].iloc[0]
     if pd.notna(default_date):
@@ -26,23 +33,23 @@ def get_snapshot_before_default(group):
 
 collapsed_df = agg_df.groupby('merged_src_ip_id').apply(get_snapshot_before_default).reset_index(drop=True)
 
-# Step 6: Create ever default flag
+# Step 7: Flag whether obligor ever defaulted
 collapsed_df['ever_default'] = collapsed_df['first_default_date'].notna().astype(int)
 
-# Step 7: Segment by commitment
+# Step 8: Define commitment-based segmentation
 collapsed_df['commitment_segment'] = collapsed_df['commitments_amt'].apply(lambda x: '<=3MM' if x <= 3_000_000 else '>3MM')
 
-# Step 8: Run Chi-squared tests
-from scipy.stats import chi2_contingency
-
+# Step 9: Run Chi-squared test on commitment-based segmentation
 contingency_commitment = pd.crosstab(collapsed_df['commitment_segment'], collapsed_df['ever_default'])
 chi2_cmt, p_cmt, _, _ = chi2_contingency(contingency_commitment)
 
+# Step 10: Run Chi-squared test on legacy modeling segments
 contingency_legacy = pd.crosstab(collapsed_df['MODELING_SEGMENT'], collapsed_df['ever_default'])
 chi2_seg, p_seg, _, _ = chi2_contingency(contingency_legacy)
 
-# Step 9: Display results
+# Step 11: Output Results
 print("==== Chi-squared Test Results ====")
+
 print("\nCommitment-Based Segmentation:")
 print(contingency_commitment)
 print(f"Chi-squared = {chi2_cmt:.3f}, p-value = {p_cmt:.4f}")
