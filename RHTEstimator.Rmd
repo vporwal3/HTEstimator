@@ -4,9 +4,10 @@ from scipy.stats import chi2_contingency
 # Step 1: Ensure 'prd_d' is datetime
 df['prd_d'] = pd.to_datetime(df['prd_d'])
 
-# Step 2: Remove obligors with any negative or zero commitment values
-bad_obligors = df[df['commitments_amt'] <= 0]['merged_src_ip_id'].unique()
-df = df[~df['merged_src_ip_id'].isin(bad_obligors)]
+# Step 2: Remove obligors whose **max commitment** is <= $500K
+max_commit_by_obligor = df.groupby('merged_src_ip_id')['commitments_amt'].max()
+low_exposure_obligors = max_commit_by_obligor[max_commit_by_obligor <= 500_000].index
+df = df[~df['merged_src_ip_id'].isin(low_exposure_obligors)]
 
 # Step 3: Aggregate to obligor-date level (summing across facilities)
 agg_df = df.groupby(['merged_src_ip_id', 'prd_d']).agg({
