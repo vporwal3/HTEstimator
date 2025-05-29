@@ -1,4 +1,81 @@
 import pandas as pd
+from scipy.stats import chi2_contingency
+
+# Convert snapshot date and extract year
+agg_df['prd_d'] = pd.to_datetime(agg_df['prd_d'])
+agg_df['year'] = agg_df['prd_d'].dt.year
+
+# Define rolling windows
+windows = [
+    (2002, 2005),
+    (2006, 2009),
+    (2010, 2013),
+    (2014, 2017),
+    (2018, 2021),
+    (2022, 2024),
+]
+
+# Define cutoffs to test
+cutoffs = [1_000_000, 2_000_000, 3_000_000]
+
+# Store results
+results = []
+
+for cutoff in cutoffs:
+    for start_year, end_year in windows:
+        window_label = f"{start_year}-{end_year}"
+        
+        # Filter data for T₀
+        window_data = agg_df[(agg_df['year'] >= start_year) & (agg_df['year'] <= end_year)]
+        t0_df = window_data.sort_values('prd_d').groupby('merged_src_ip_id').first().reset_index()
+        
+        # Define 12-month future window
+        t0_dates = t0_df[['merged_src_ip_id', 'prd_d']]
+        outcome_data = agg_df[['merged_src_ip_id', 'prd_d', 'CCAR_NON_ACCRL_FLAG']].copy()
+        
+        merged = t0_dates.merge(outcome_data, on='merged_src_ip_id', how='left', suffixes=('', '_event'))
+        merged['months_after_t0'] = (merged['prd_d_event'] - merged['prd_d']).dt.days / 30
+        future_defaults = merged[(merged['months_after_t0'] > 0) & (merged['months_after_t0'] <= 12)]
+        default_flag = future_defaults.groupby('merged_src_ip_id')['CCAR_NON_ACCRL_FLAG'].max().reset_index()
+        default_flag.columns = ['merged_src_ip_id', 'default_within_12m']
+        
+        # Merge back into T₀ data
+        analysis_df = t0_df.merge(default_flag, on='merged_src_ip_id', how='left')
+        analysis_df['default_within_12m'] = analysis_df['default_within_12m'].fillna(0).astype(int)
+
+        # Segment by current cutoff
+        analysis_df['cutoff_segment'] = analysis_df['commitments_amt'].apply(
+            lambda x: f'≤{cutoff/1_000_000:.0f}MM' if x <= cutoff else f'>{cutoff/1_000_000:.0f}MM'
+        )
+
+        # Chi-squared test for this cutoff segment
+        cont = pd.crosstab(analysis_df['cutoff_segment'], analysis_df['default_within_12m'])
+        if cont.shape == (2, 2):
+            chi2, p, _, _ = chi2_contingency(cont)
+        else:
+            chi2, p = None, None
+
+        # Store results
+        results.append({
+            'cutoff': cutoff,
+            'cutoff_label': f"≤{cutoff/1_000_000:.0f}MM",
+            'window': window_label,
+            'num_obligors': len(analysis_df),
+            'num_defaults': analysis_df['default_within_12m'].sum(),
+            'chi2_stat': chi2,
+            'p_value': p
+        })
+
+# Save to CSV
+cutoff_results_df = pd.DataFrame(results)
+cutoff_results_df.to_csv("segmentation_cutoff_comparison.csv", index=False)
+
+# Optional display
+print(cutoff_results_df.head())
+
+
+
+import pandas as pd
 import matplotlib.pyplot as plt
 
 # Load results
