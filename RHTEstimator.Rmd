@@ -1,3 +1,16 @@
+
+import pandas as pd
+
+# Ensure prd_d is datetime
+df['prd_d'] = pd.to_datetime(df['prd_d'])
+
+# Columns to bin
+feature_cols = ['x1', 'x2', 'x3', 'x4', 'x5', 'x6', 'x7']
+special_code = -999
+
+# Assign special code to features where prd_d < 2020
+df.loc[df['prd_d'].dt.year < 2020, feature_cols] = special_code
+
 t0_df = window_data.sort_values('prd_d').groupby('merged_src_ip_id').first().reset_index()
 t0_df = t0_df[t0_df['commitments_amt'] > 500_000]  # Apply the filter here
 
