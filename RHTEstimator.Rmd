@@ -1,3 +1,12 @@
+# Step 1: Identify obligors who ever had a negative commitment
+neg_commit_ids = df[df['commitments_amt'] < 0]['merged_src_ip_id'].unique()
+
+# Step 2: Remove all records for those obligors
+df_cleaned = df[~df['merged_src_ip_id'].isin(neg_commit_ids)]
+
+print("Obligors removed due to negative commitments:", len(neg_commit_ids))
+
+
 Other Approaches (and Their Drawbacks):
 
 🔹 1. Single Arbitrary Snapshot (e.g., 2020 Q1)
