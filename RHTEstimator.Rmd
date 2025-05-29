@@ -1,3 +1,41 @@
+Window ID
+Years (Quarterly)
+Economic / Credit Cycle Context
+Defaults Trend
+Why It’s Useful
+W1
+2002Q1 – 2005Q4
+Post-dot-com recovery; low growth but stabilizing corporate credit
+Rising but moderate defaults
+Baseline “normal” period; good contrast against later crises
+W2
+2006Q1 – 2009Q4
+Credit boom → Global Financial Crisis onset (2007–2008)
+Rising sharply by 2008–09
+Tests segmentation under pre-crisis and crisis entry conditions
+W3
+2010Q1 – 2013Q4
+Post-crisis high delinquencies; sluggish recovery
+Peak defaults (your chart shows ~900+)
+Ideal for showing strongest divergence in default risk behavior
+W4
+2014Q1 – 2017Q4
+Recovery phase, stable interest rates, strong credit quality
+Declining defaults
+Tests how segmentation performs in a low-risk period
+W5
+2018Q1 – 2021Q4
+COVID onset (2020), Fed rate cuts, government support programs
+Uptick in defaults (esp. 2020–21)
+Important for testing segmentation under stress but with policy distortion
+W6
+2022Q1 – 2024Q2
+Post-COVID tightening, inflation spike, aggressive Fed hikes
+Recent decline, but still elevated
+Useful to test segmentation as portfolio risk adjusts to rate hikes
+
+
+
 
 import pandas as pd
 import matplotlib.pyplot as plt
