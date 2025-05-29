@@ -1,194 +1,41 @@
 import pandas as pd
-from scipy.stats import chi2_contingency
-
-# Convert snapshot date and extract year
-agg_df['prd_d'] = pd.to_datetime(agg_df['prd_d'])
-agg_df['year'] = agg_df['prd_d'].dt.year
-
-# Define rolling windows
-windows = [
-    (2002, 2005),
-    (2006, 2009),
-    (2010, 2013),
-    (2014, 2017),
-    (2018, 2021),
-    (2022, 2024),
-]
-
-# Define cutoffs to test
-cutoffs = [1_000_000, 2_000_000, 3_000_000]
-
-# Store results
-results = []
-
-for cutoff in cutoffs:
-    for start_year, end_year in windows:
-        window_label = f"{start_year}-{end_year}"
-        
-        # Filter data for T₀
-        window_data = agg_df[(agg_df['year'] >= start_year) & (agg_df['year'] <= end_year)]
-        t0_df = window_data.sort_values('prd_d').groupby('merged_src_ip_id').first().reset_index()
-        
-        # Define 12-month future window
-        t0_dates = t0_df[['merged_src_ip_id', 'prd_d']]
-        outcome_data = agg_df[['merged_src_ip_id', 'prd_d', 'CCAR_NON_ACCRL_FLAG']].copy()
-        
-        merged = t0_dates.merge(outcome_data, on='merged_src_ip_id', how='left', suffixes=('', '_event'))
-        merged['months_after_t0'] = (merged['prd_d_event'] - merged['prd_d']).dt.days / 30
-        future_defaults = merged[(merged['months_after_t0'] > 0) & (merged['months_after_t0'] <= 12)]
-        default_flag = future_defaults.groupby('merged_src_ip_id')['CCAR_NON_ACCRL_FLAG'].max().reset_index()
-        default_flag.columns = ['merged_src_ip_id', 'default_within_12m']
-        
-        # Merge back into T₀ data
-        analysis_df = t0_df.merge(default_flag, on='merged_src_ip_id', how='left')
-        analysis_df['default_within_12m'] = analysis_df['default_within_12m'].fillna(0).astype(int)
-
-        # Segment by current cutoff
-        analysis_df['cutoff_segment'] = analysis_df['commitments_amt'].apply(
-            lambda x: f'≤{cutoff/1_000_000:.0f}MM' if x <= cutoff else f'>{cutoff/1_000_000:.0f}MM'
-        )
-
-        # Chi-squared test for this cutoff segment
-        cont = pd.crosstab(analysis_df['cutoff_segment'], analysis_df['default_within_12m'])
-        if cont.shape == (2, 2):
-            chi2, p, _, _ = chi2_contingency(cont)
-        else:
-            chi2, p = None, None
-
-        # Store results
-        results.append({
-            'cutoff': cutoff,
-            'cutoff_label': f"≤{cutoff/1_000_000:.0f}MM",
-            'window': window_label,
-            'num_obligors': len(analysis_df),
-            'num_defaults': analysis_df['default_within_12m'].sum(),
-            'chi2_stat': chi2,
-            'p_value': p
-        })
-
-# Save to CSV
-cutoff_results_df = pd.DataFrame(results)
-cutoff_results_df.to_csv("segmentation_cutoff_comparison.csv", index=False)
-
-# Optional display
-print(cutoff_results_df.head())
-
-
-
-import pandas as pd
 import matplotlib.pyplot as plt
 
 # Load results
-results_df = pd.read_csv('segmentation_rolling_window_results.csv')
+cutoff_results = pd.read_csv("segmentation_cutoff_comparison.csv")
 
-# Compare chi-squared values
+# Convert cutoff column to string for easier plotting
+cutoff_results['cutoff_str'] = cutoff_results['cutoff'].apply(lambda x: f"≤{int(x/1_000_000)}MM")
+
+# Plot chi-squared comparison across windows for each cutoff
 plt.figure(figsize=(12, 6))
-plt.plot(results_df['window'], results_df['commitment_chi2'], marker='o', label='Commitment Segment')
-plt.plot(results_df['window'], results_df['modeling_chi2'], marker='s', label='Legacy Segment')
-plt.title('Chi-Squared Comparison by Segmentation Strategy')
+
+# Plot line per cutoff
+for cutoff in sorted(cutoff_results['cutoff'].unique()):
+    subset = cutoff_results[cutoff_results['cutoff'] == cutoff]
+    plt.plot(subset['window'], subset['chi2_stat'], marker='o', label=f'Cutoff ≤{int(cutoff/1_000_000)}MM')
+
+plt.title('Chi-Squared Comparison Across Commitment Cutoffs')
 plt.xlabel('Rolling Window')
 plt.ylabel('Chi-Squared Statistic')
-plt.legend()
+plt.legend(title='Commitment Cutoff')
 plt.grid(True)
 plt.xticks(rotation=45)
 plt.tight_layout()
 plt.show()
 
-# Plot p-values
+# Optional: P-value plot
 plt.figure(figsize=(12, 6))
-plt.plot(results_df['window'], results_df['commitment_p'], marker='o', label='Commitment Segment')
-plt.plot(results_df['window'], results_df['modeling_p'], marker='s', label='Legacy Segment')
-plt.title('P-Value Comparison by Segmentation Strategy')
+for cutoff in sorted(cutoff_results['cutoff'].unique()):
+    subset = cutoff_results[cutoff_results['cutoff'] == cutoff]
+    plt.plot(subset['window'], subset['p_value'], marker='s', label=f'Cutoff ≤{int(cutoff/1_000_000)}MM')
+
+plt.axhline(0.05, color='red', linestyle='--', label='Significance Threshold (0.05)')
+plt.title('P-Value Comparison Across Commitment Cutoffs')
 plt.xlabel('Rolling Window')
 plt.ylabel('P-Value')
-plt.axhline(0.05, color='red', linestyle='--', label='Significance Threshold (0.05)')
-plt.legend()
+plt.legend(title='Commitment Cutoff')
 plt.grid(True)
 plt.xticks(rotation=45)
 plt.tight_layout()
 plt.show()
-
-
-
-import pandas as pd
-from scipy.stats import chi2_contingency
-
-# Convert snapshot date and extract year
-agg_df['prd_d'] = pd.to_datetime(agg_df['prd_d'])
-agg_df['year'] = agg_df['prd_d'].dt.year
-
-# Define 4-year rolling windows
-windows = [
-    (2002, 2005),
-    (2006, 2009),
-    (2010, 2013),
-    (2014, 2017),
-    (2018, 2021),
-    (2022, 2024),
-]
-
-# Store results
-results = []
-
-for start_year, end_year in windows:
-    window_label = f"{start_year}-{end_year}"
-    
-    # Filter for T₀ candidates within window
-    window_data = agg_df[(agg_df['year'] >= start_year) & (agg_df['year'] <= end_year)]
-    
-    # Get first snapshot in window per obligor
-    t0_df = window_data.sort_values('prd_d').groupby('merged_src_ip_id').first().reset_index()
-    
-    # Create 12-month future window for default tracking
-    t0_dates = t0_df[['merged_src_ip_id', 'prd_d']]
-    outcome_data = agg_df[['merged_src_ip_id', 'prd_d', 'CCAR_NON_ACCRL_FLAG']].copy()
-    
-    # Merge for tracking default after T₀
-    merged = t0_dates.merge(outcome_data, on='merged_src_ip_id', how='left', suffixes=('', '_event'))
-    merged['months_after_t0'] = (merged['prd_d_event'] - merged['prd_d']).dt.days / 30
-
-    # Identify default in next 12 months
-    future_defaults = merged[(merged['months_after_t0'] > 0) & (merged['months_after_t0'] <= 12)]
-    default_flag = future_defaults.groupby('merged_src_ip_id')['CCAR_NON_ACCRL_FLAG'].max().reset_index()
-    default_flag.columns = ['merged_src_ip_id', 'default_within_12m']
-
-    # Merge default flag into T₀ dataset
-    analysis_df = t0_df.merge(default_flag, on='merged_src_ip_id', how='left')
-    analysis_df['default_within_12m'] = analysis_df['default_within_12m'].fillna(0).astype(int)
-
-    # Create commitment-based segment
-    analysis_df['commitment_segment'] = analysis_df['commitments_amt'].apply(
-        lambda x: '<=3MM' if x <= 3_000_000 else '>3MM'
-    )
-
-    # Chi-squared test: commitment segment vs default
-    cont_commit = pd.crosstab(analysis_df['commitment_segment'], analysis_df['default_within_12m'])
-    if cont_commit.shape == (2, 2):
-        chi2_cmt, p_cmt, _, _ = chi2_contingency(cont_commit)
-    else:
-        chi2_cmt, p_cmt = None, None
-
-    # Chi-squared test: modeling segment vs default
-    cont_modeling = pd.crosstab(analysis_df['MODELING_SEGMENT'], analysis_df['default_within_12m'])
-    if cont_modeling.shape[1] == 2:
-        chi2_seg, p_seg, _, _ = chi2_contingency(cont_modeling)
-    else:
-        chi2_seg, p_seg = None, None
-
-    # Store results
-    results.append({
-        'window': window_label,
-        'num_obligors': len(analysis_df),
-        'num_defaults': analysis_df['default_within_12m'].sum(),
-        'commitment_chi2': chi2_cmt,
-        'commitment_p': p_cmt,
-        'modeling_chi2': chi2_seg,
-        'modeling_p': p_seg
-    })
-
-# Save results to CSV
-results_df = pd.DataFrame(results)
-results_df.to_csv("segmentation_rolling_window_results.csv", index=False)
-
-# Optional: display results
-print(results_df)
