@@ -1,3 +1,6 @@
+t0_df = window_data.sort_values('prd_d').groupby('merged_src_ip_id').first().reset_index()
+t0_df = t0_df[t0_df['commitments_amt'] > 500_000]  # Apply the filter here
+
 
 agg_df = df.groupby(['merged_src_ip_id', 'prd_d']).agg({
     'commitments_amt': 'sum',  # total commitments across facilities
