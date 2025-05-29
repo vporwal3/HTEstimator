@@ -1,3 +1,46 @@
+
+import pandas as pd
+import matplotlib.pyplot as plt
+
+# Step 1: Ensure 'prd_d' is datetime
+df['prd_d'] = pd.to_datetime(df['prd_d'])
+
+# Step 2: Extract year
+df['year'] = df['prd_d'].dt.year
+
+# Step 3: Count unique obligors per year
+active_obligors_per_year = df.groupby('year')['merged_src_ip_id'].nunique()
+
+# Step 4: Count unique defaults per year (flag = 1)
+defaults_per_year = (
+    df[df['CCAR_NON_ACCRL_FLAG'] == 1]
+    .groupby('year')['merged_src_ip_id']
+    .nunique()
+)
+
+# Step 5: Plot
+fig, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
+
+# Plot 1: Active obligors
+axes[0].bar(active_obligors_per_year.index, active_obligors_per_year.values, color='steelblue')
+axes[0].set_title('Number of Active Obligors per Year')
+axes[0].set_ylabel('Unique Obligors')
+axes[0].grid(axis='y')
+
+# Plot 2: Defaults per year
+axes[1].bar(defaults_per_year.index, defaults_per_year.values, color='darkorange')
+axes[1].set_title('Number of Defaults per Year')
+axes[1].set_xlabel('Year')
+axes[1].set_ylabel('Defaults')
+axes[1].grid(axis='y')
+
+plt.tight_layout()
+plt.show()
+
+
+
+
+
 import pandas as pd
 from scipy.stats import chi2_contingency
 
