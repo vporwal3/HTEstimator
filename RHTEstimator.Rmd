@@ -1,111 +1,40 @@
-# Step 1: Identify obligors who ever had a negative commitment
-neg_commit_ids = df[df['commitments_amt'] < 0]['merged_src_ip_id'].unique()
+import pandas as pd
+import matplotlib.pyplot as plt
 
-# Step 2: Remove all records for those obligors
-df_cleaned = df[~df['merged_src_ip_id'].isin(neg_commit_ids)]
+# Convert to datetime
+df['prd_d'] = pd.to_datetime(df['prd_d'])
+df['year'] = df['prd_d'].dt.year
 
-print("Obligors removed due to negative commitments:", len(neg_commit_ids))
+# Sort to get default transitions
+df_sorted = df.sort_values(['merged_src_ip_id', 'prd_d'])
 
+# Identify new defaults (where obligor transitions from 0 to 1)
+df_sorted['prev_flag'] = df_sorted.groupby('merged_src_ip_id')['CCAR_NON_ACCRL_FLAG'].shift(1).fillna(0)
+df_sorted['new_default'] = (df_sorted['CCAR_NON_ACCRL_FLAG'] == 1) & (df_sorted['prev_flag'] == 0)
 
-Other Approaches (and Their Drawbacks):
+# Active obligors per year
+active_obligors_per_year = df.groupby('year')['merged_src_ip_id'].nunique()
 
-🔹 1. Single Arbitrary Snapshot (e.g., 2020 Q1)
-	•	❌ May exclude obligors that became active later
-	•	❌ Does not generalize across economic regimes
+# New defaults per year (only first time an obligor defaults)
+new_defaults_per_year = (
+    df_sorted[df_sorted['new_default']]
+    .groupby('year')['merged_src_ip_id']
+    .nunique()
+)
 
-🔹 2. Snapshot Closest to Default for Defaulters, Max Commitment for Non-Defaulters
-	•	❌ Violates time consistency — you’re comparing pre-default vs post-default behavior
-	•	❌ Biased: exposure values are taken from different reference points depending on the outcome
-(makes the test invalid — you’re “peeking into the future”)
+# Plotting
+fig, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
 
+axes[0].bar(active_obligors_per_year.index, active_obligors_per_year.values, color='steelblue')
+axes[0].set_title('Number of Active Obligors per Year')
+axes[0].set_ylabel('Unique Obligors')
+axes[0].grid(axis='y')
 
-Perfect — you’re breaking this down exactly the way Model Risk, Credit Policy, or Senior Modeling leads would expect. Below is a suggested slide-by-slide breakdown (titles + bullet content) for presenting your rolling window Chi-squared segmentation analysis methodically and convincingly.
+axes[1].bar(new_defaults_per_year.index, new_defaults_per_year.values, color='darkorange')
+axes[1].set_title('Number of New Defaults per Year')
+axes[1].set_xlabel('Year')
+axes[1].set_ylabel('New Defaults')
+axes[1].grid(axis='y')
 
-⸻
-
-📊 Slide 1: Objective of Segmentation Justification
-
-Title: Justifying Segmentation Strategy for PD Modeling
-
-Content:
-	•	Goal: Demonstrate that commitment-based segmentation (≤3MM vs >3MM) is statistically meaningful
-	•	Compare against legacy segmentation (e.g., MM, Institutional, Leasing)
-	•	Use rigorous hypothesis testing to support model governance and validation
-
-⸻
-
-⚖️ Slide 2: Statistical Test Used
-
-Title: Why Use a Chi-Squared Test?
-
-Content:
-	•	Hypothesis:
-	•	Null (H₀): Default rates are the same across segments
-	•	Alternative (H₁): Default rates differ across segments
-	•	Chi-squared test is ideal for:
-	•	Binary outcomes (default vs no-default)
-	•	Categorical grouping (e.g., commitment segment or legacy segment)
-	•	Requires a 2x2 contingency table:
-	•	Rows: Segment groups (e.g., ≤3MM vs >3MM)
-	•	Columns: Default = 1 or 0
-
-⸻
-
-📦 Slide 3: Why Collapse to One Row per Obligor?
-
-Title: Panel Data Must Be Collapsed to Avoid Bias
-
-Content:
-	•	Raw data is at obligor × time (panel) level
-	•	Chi-squared test assumes independent observations
-	•	Including multiple records per obligor would:
-	•	Inflate sample size
-	•	Violate independence assumption
-	•	Overstate significance
-	•	Solution: Create 1 row per obligor, capturing their:
-	•	First observed features (T₀)
-	•	Default outcome (e.g., within 12 months of T₀)
-
-⸻
-
-⏳ Slide 4: Why Use a Rolling Window?
-
-Title: Rolling Windows Capture Economic Variation
-
-Content:
-	•	Default behavior is time-dependent (e.g., pre vs post-COVID)
-	•	Splitting data into time windows lets us:
-	•	Control for macroeconomic effects
-	•	Compare how segmentation performs in different cycles
-	•	Prevents one “bad year” from dominating full-sample results
-	•	Increases transparency and robustness
-
-⸻
-
-🔄 Slide 5: Rolling Window Methodology
-
-Title: How the Rolling Window Method Works
-
-Content:
-	•	Step 1: Define rolling 4-year windows (e.g., 2010–2013, 2014–2017)
-	•	Step 2: For each obligor, select first snapshot (T₀) within that window
-	•	Step 3: Track if obligor defaulted within 12 months
-	•	Step 4: Build contingency table by segment vs default
-	•	Step 5: Run Chi-squared tests for:
-	•	Commitment segmentation
-	•	Legacy segmentation
-	•	Repeat steps for each window and compare test statistics
-
-⸻
-
-📈 (Optional Next Slide: Visualization Preview)
-
-Title: Preview: Statistical Power Across Windows
-
-Content (placeholder for next slides):
-	•	Chi-squared statistic across time shows which segmentation better separates default behavior
-	•	Helps determine if commitment cutoff is stable and meaningful
-
-⸻
-
-Let me know if you’d like these as a PowerPoint file or formatted markdown/LaTeX for internal decks. We can proceed to the results interpretation slides next.
+plt.tight_layout()
+plt.show()
