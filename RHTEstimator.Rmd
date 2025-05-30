@@ -1,3 +1,13 @@
+# Identify first row per obligor
+first_appearance = df_sorted.groupby('merged_src_ip_id').first().reset_index()
+
+# Get obligors who were already defaulted at their first record
+carry_in_defaults = first_appearance[first_appearance['CCAR_NON_ACCRL_FLAG'] == 1]['merged_src_ip_id']
+
+# Remove these from the dataset before calculating new defaults
+df_sorted = df_sorted[~df_sorted['merged_src_ip_id'].isin(carry_in_defaults)]
+
+
 import pandas as pd
 import matplotlib.pyplot as plt
 
