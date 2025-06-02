@@ -1,3 +1,23 @@
+import numpy as np
+
+# Compute Cramér's V
+results_df['cramers_v_commitment'] = np.sqrt(results_df['commitment_chi2'] / (results_df['num_obligors'] * 1))  # df=1
+results_df['cramers_v_modeling'] = np.sqrt(results_df['modeling_chi2'] / (results_df['num_obligors'] * 2))      # df=2
+
+# Plot Cramér's V
+plt.figure(figsize=(12, 6))
+plt.plot(results_df['window'], results_df['cramers_v_commitment'], marker='o', label='Commitment Segment', linewidth=2)
+plt.plot(results_df['window'], results_df['cramers_v_modeling'], marker='s', label='Legacy Segment', linewidth=2)
+
+plt.title("Cramér's V Comparison by Segmentation Strategy")
+plt.xlabel("Rolling Window")
+plt.ylabel("Cramér's V (Effect Size)")
+plt.legend()
+plt.grid(True)
+plt.tight_layout()
+plt.show()
+
+
 # Identify first row per obligor
 first_appearance = df_sorted.groupby('merged_src_ip_id').first().reset_index()
 
