@@ -1,85 +1,55 @@
 import pandas as pd
 import numpy as np
 from scipy.stats import mannwhitneyu
-import matplotlib.pyplot as plt
 
-# Ensure prd_d is datetime
-agg_df['prd_d'] = pd.to_datetime(agg_df['prd_d'])
-agg_df['year'] = agg_df['prd_d'].dt.year
+def run_mannwhitney_by_window(
+    df,
+    var_list,
+    segment_col='commitments_amt',
+    segment_cutoff=3_000_000,
+    window_list=[(2003, 2005), (2006, 2009), (2010, 2013), (2014, 2017), (2018, 2021), (2022, 2024)],
+    date_col='prd_d',
+    obligor_id_col='merged_src_ip_id'
+):
+    df = df.copy()
+    df[date_col] = pd.to_datetime(df[date_col])
+    df['year'] = df[date_col].dt.year
 
-# Define rolling windows
-windows = [
-    (2003, 2005),
-    (2006, 2009),
-    (2010, 2013),
-    (2014, 2017),
-    (2018, 2021),
-    (2022, 2024),
-]
+    results = []
 
-# Store results
-results = []
+    for start_year, end_year in window_list:
+        window_label = f"{start_year}-{end_year}"
 
-for start_year, end_year in windows:
-    window_label = f"{start_year}-{end_year}"
-    
-    # Filter data for this window
-    window_data = agg_df[(agg_df['year'] >= start_year) & (agg_df['year'] <= end_year)].copy()
-    
-    # Get first snapshot per obligor
-    t0_df = window_data.sort_values('prd_d').groupby('merged_src_ip_id').first().reset_index()
+        # Filter data for window
+        window_data = df[(df['year'] >= start_year) & (df['year'] <= end_year)].copy()
+        t0_df = window_data.sort_values(date_col).groupby(obligor_id_col).first().reset_index()
 
-    # Filter out those with missing values
-    t0_df = t0_df[
-        (t0_df['commitments_amt'] > 0) &
-        t0_df[['RISK_RATING', 'day_past_due', 'outstandings_amt', 'int_rate_apr']].notnull().all(axis=1)
-    ]
+        # Drop rows with missing values in test variables
+        t0_df = t0_df[
+            (t0_df[segment_col] > 0) &
+            t0_df[var_list].notnull().all(axis=1)
+        ]
 
-    # Define commitment segment
-    t0_df['commitment_segment'] = t0_df['commitments_amt'].apply(lambda x: '<=3MM' if x <= 3_000_000 else '>3MM')
+        # Define segment (<=cutoff vs >cutoff)
+        t0_df['segment'] = t0_df[segment_col].apply(lambda x: f'≤{segment_cutoff/1e6:.0f}MM' if x <= segment_cutoff else f'>{segment_cutoff/1e6:.0f}MM')
 
-    # Split into groups
-    group_low = t0_df[t0_df['commitment_segment'] == '<=3MM']
-    group_high = t0_df[t0_df['commitment_segment'] == '>3MM']
+        # Split into groups
+        group_low = t0_df[t0_df['segment'].str.startswith('≤')]
+        group_high = t0_df[t0_df['segment'].str.startswith('>')]
 
-    def safe_mw(x1, x2):
-        try:
-            stat, p = mannwhitneyu(x1, x2, alternative='two-sided')
-            return p
-        except:
-            return np.nan
+        # Mann-Whitney test function
+        def safe_mw(x1, x2):
+            try:
+                stat, p = mannwhitneyu(x1, x2, alternative='two-sided')
+                return p
+            except:
+                return np.nan
 
-    # Run Mann-Whitney U tests
-    p_risk = safe_mw(group_low['RISK_RATING'], group_high['RISK_RATING'])
-    p_dpd = safe_mw(group_low['day_past_due'], group_high['day_past_due'])
-    p_out_amt = safe_mw(group_low['outstandings_amt'], group_high['outstandings_amt'])
-    p_int_rate = safe_mw(group_low['int_rate_apr'], group_high['int_rate_apr'])
+        row_result = {'window': window_label}
+        for var in var_list:
+            p_val = safe_mw(group_low[var], group_high[var])
+            row_result[f"mw_p_{var}"] = p_val
 
-    results.append({
-        'window': window_label,
-        'mw_p_risk_rating': p_risk,
-        'mw_p_dpd': p_dpd,
-        'mw_p_outstanding': p_out_amt,
-        'mw_p_int_rate': p_int_rate
-    })
+        results.append(row_result)
 
-# Convert to DataFrame
-results_df = pd.DataFrame(results)
-
-# Plotting
-plt.figure(figsize=(12, 6))
-plt.plot(results_df['window'], results_df['mw_p_risk_rating'], marker='o', label='Risk Rating')
-plt.plot(results_df['window'], results_df['mw_p_dpd'], marker='s', label='Days Past Due')
-plt.plot(results_df['window'], results_df['mw_p_outstanding'], marker='^', label='Outstanding Amount')
-plt.plot(results_df['window'], results_df['mw_p_int_rate'], marker='d', label='Interest Rate')
-plt.axhline(0.05, color='red', linestyle='--', label='p = 0.05 threshold')
-plt.title("Mann-Whitney U Test p-values by Rolling Window (Commitment Segments)")
-plt.xlabel("Rolling Window")
-plt.ylabel("p-value")
-plt.legend()
-plt.grid(True)
-plt.tight_layout()
-plt.show()
-
-# Optional: save to CSV
-results_df.to_csv("phase2_mannwhitney_results.csv", index=False)
+    return pd.DataFrame(results)
