@@ -1,70 +1,85 @@
+import pandas as pd
 import numpy as np
+from scipy.stats import mannwhitneyu
+import matplotlib.pyplot as plt
 
-# Compute Cramér's V
-results_df['cramers_v_commitment'] = np.sqrt(results_df['commitment_chi2'] / (results_df['num_obligors'] * 1))  # df=1
-results_df['cramers_v_modeling'] = np.sqrt(results_df['modeling_chi2'] / (results_df['num_obligors'] * 2))      # df=2
+# Ensure prd_d is datetime
+agg_df['prd_d'] = pd.to_datetime(agg_df['prd_d'])
+agg_df['year'] = agg_df['prd_d'].dt.year
 
-# Plot Cramér's V
+# Define rolling windows
+windows = [
+    (2003, 2005),
+    (2006, 2009),
+    (2010, 2013),
+    (2014, 2017),
+    (2018, 2021),
+    (2022, 2024),
+]
+
+# Store results
+results = []
+
+for start_year, end_year in windows:
+    window_label = f"{start_year}-{end_year}"
+    
+    # Filter data for this window
+    window_data = agg_df[(agg_df['year'] >= start_year) & (agg_df['year'] <= end_year)].copy()
+    
+    # Get first snapshot per obligor
+    t0_df = window_data.sort_values('prd_d').groupby('merged_src_ip_id').first().reset_index()
+
+    # Filter out those with missing values
+    t0_df = t0_df[
+        (t0_df['commitments_amt'] > 0) &
+        t0_df[['RISK_RATING', 'day_past_due', 'outstandings_amt', 'int_rate_apr']].notnull().all(axis=1)
+    ]
+
+    # Define commitment segment
+    t0_df['commitment_segment'] = t0_df['commitments_amt'].apply(lambda x: '<=3MM' if x <= 3_000_000 else '>3MM')
+
+    # Split into groups
+    group_low = t0_df[t0_df['commitment_segment'] == '<=3MM']
+    group_high = t0_df[t0_df['commitment_segment'] == '>3MM']
+
+    def safe_mw(x1, x2):
+        try:
+            stat, p = mannwhitneyu(x1, x2, alternative='two-sided')
+            return p
+        except:
+            return np.nan
+
+    # Run Mann-Whitney U tests
+    p_risk = safe_mw(group_low['RISK_RATING'], group_high['RISK_RATING'])
+    p_dpd = safe_mw(group_low['day_past_due'], group_high['day_past_due'])
+    p_out_amt = safe_mw(group_low['outstandings_amt'], group_high['outstandings_amt'])
+    p_int_rate = safe_mw(group_low['int_rate_apr'], group_high['int_rate_apr'])
+
+    results.append({
+        'window': window_label,
+        'mw_p_risk_rating': p_risk,
+        'mw_p_dpd': p_dpd,
+        'mw_p_outstanding': p_out_amt,
+        'mw_p_int_rate': p_int_rate
+    })
+
+# Convert to DataFrame
+results_df = pd.DataFrame(results)
+
+# Plotting
 plt.figure(figsize=(12, 6))
-plt.plot(results_df['window'], results_df['cramers_v_commitment'], marker='o', label='Commitment Segment', linewidth=2)
-plt.plot(results_df['window'], results_df['cramers_v_modeling'], marker='s', label='Legacy Segment', linewidth=2)
-
-plt.title("Cramér's V Comparison by Segmentation Strategy")
+plt.plot(results_df['window'], results_df['mw_p_risk_rating'], marker='o', label='Risk Rating')
+plt.plot(results_df['window'], results_df['mw_p_dpd'], marker='s', label='Days Past Due')
+plt.plot(results_df['window'], results_df['mw_p_outstanding'], marker='^', label='Outstanding Amount')
+plt.plot(results_df['window'], results_df['mw_p_int_rate'], marker='d', label='Interest Rate')
+plt.axhline(0.05, color='red', linestyle='--', label='p = 0.05 threshold')
+plt.title("Mann-Whitney U Test p-values by Rolling Window (Commitment Segments)")
 plt.xlabel("Rolling Window")
-plt.ylabel("Cramér's V (Effect Size)")
+plt.ylabel("p-value")
 plt.legend()
 plt.grid(True)
 plt.tight_layout()
 plt.show()
 
-
-# Identify first row per obligor
-first_appearance = df_sorted.groupby('merged_src_ip_id').first().reset_index()
-
-# Get obligors who were already defaulted at their first record
-carry_in_defaults = first_appearance[first_appearance['CCAR_NON_ACCRL_FLAG'] == 1]['merged_src_ip_id']
-
-# Remove these from the dataset before calculating new defaults
-df_sorted = df_sorted[~df_sorted['merged_src_ip_id'].isin(carry_in_defaults)]
-
-
-import pandas as pd
-import matplotlib.pyplot as plt
-
-# Convert to datetime
-df['prd_d'] = pd.to_datetime(df['prd_d'])
-df['year'] = df['prd_d'].dt.year
-
-# Sort to get default transitions
-df_sorted = df.sort_values(['merged_src_ip_id', 'prd_d'])
-
-# Identify new defaults (where obligor transitions from 0 to 1)
-df_sorted['prev_flag'] = df_sorted.groupby('merged_src_ip_id')['CCAR_NON_ACCRL_FLAG'].shift(1).fillna(0)
-df_sorted['new_default'] = (df_sorted['CCAR_NON_ACCRL_FLAG'] == 1) & (df_sorted['prev_flag'] == 0)
-
-# Active obligors per year
-active_obligors_per_year = df.groupby('year')['merged_src_ip_id'].nunique()
-
-# New defaults per year (only first time an obligor defaults)
-new_defaults_per_year = (
-    df_sorted[df_sorted['new_default']]
-    .groupby('year')['merged_src_ip_id']
-    .nunique()
-)
-
-# Plotting
-fig, axes = plt.subplots(2, 1, figsize=(12, 8), sharex=True)
-
-axes[0].bar(active_obligors_per_year.index, active_obligors_per_year.values, color='steelblue')
-axes[0].set_title('Number of Active Obligors per Year')
-axes[0].set_ylabel('Unique Obligors')
-axes[0].grid(axis='y')
-
-axes[1].bar(new_defaults_per_year.index, new_defaults_per_year.values, color='darkorange')
-axes[1].set_title('Number of New Defaults per Year')
-axes[1].set_xlabel('Year')
-axes[1].set_ylabel('New Defaults')
-axes[1].grid(axis='y')
-
-plt.tight_layout()
-plt.show()
+# Optional: save to CSV
+results_df.to_csv("phase2_mannwhitney_results.csv", index=False)
