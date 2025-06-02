@@ -5,67 +5,72 @@ import seaborn as sns
 from sklearn.decomposition import PCA
 from sklearn.preprocessing import StandardScaler
 
-def visualize_pca_segments(
+def visualize_pca_all_windows(
     df,
     features=['RISK_RATING', 'outstandings_amt'],
     date_col='prd_d',
     id_col='merged_src_ip_id',
     segment_col='commitments_amt',
     modeling_segment_col='MODELING_SEGMENT',
-    window=(2014, 2017),
-    segment_cutoff=3_000_000
+    segment_cutoff=3_000_000,
+    window_list=[(2003, 2005), (2006, 2009), (2010, 2013), (2014, 2017), (2018, 2021), (2022, 2024)]
 ):
     df = df.copy()
     df[date_col] = pd.to_datetime(df[date_col])
     df['year'] = df[date_col].dt.year
 
-    # Filter window and select one record per obligor
-    df_window = df[(df['year'] >= window[0]) & (df['year'] <= window[1])]
-    df_snapshot = df_window.sort_values(date_col).groupby(id_col).first().reset_index()
+    for start_year, end_year in window_list:
+        window_label = f"{start_year}-{end_year}"
+        df_window = df[(df['year'] >= start_year) & (df['year'] <= end_year)]
+        df_snapshot = df_window.sort_values(date_col).groupby(id_col).first().reset_index()
+        df_snapshot = df_snapshot.dropna(subset=features + [segment_col, modeling_segment_col])
 
-    # Drop missing values
-    df_snapshot = df_snapshot.dropna(subset=features + [segment_col, modeling_segment_col])
+        df_snapshot['commitment_segment'] = df_snapshot[segment_col].apply(
+            lambda x: '≤3MM' if x <= segment_cutoff else '>3MM'
+        )
 
-    # Create segment columns
-    df_snapshot['commitment_segment'] = df_snapshot[segment_col].apply(
-        lambda x: '≤3MM' if x <= segment_cutoff else '>3MM'
-    )
+        # PCA
+        X = df_snapshot[features].values
+        X_scaled = StandardScaler().fit_transform(X)
+        pca = PCA(n_components=2)
+        X_pca = pca.fit_transform(X_scaled)
 
-    # PCA preparation
-    X = df_snapshot[features].values
-    X_scaled = StandardScaler().fit_transform(X)
-    pca = PCA(n_components=2)
-    X_pca = pca.fit_transform(X_scaled)
-    df_snapshot['PC1'] = X_pca[:, 0]
-    df_snapshot['PC2'] = X_pca[:, 1]
+        df_snapshot['PC1'] = X_pca[:, 0]
+        df_snapshot['PC2'] = X_pca[:, 1]
 
-    # PCA Plot: Commitment Segment
-    plt.figure(figsize=(10, 6))
-    sns.scatterplot(
-        data=df_snapshot,
-        x='PC1',
-        y='PC2',
-        hue='commitment_segment',
-        alpha=0.6
-    )
-    plt.title(f'PCA Plot: Commitment Segment ({window[0]}–{window[1]})')
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
+        # Trim PCA outliers
+        lower_pc2, upper_pc2 = np.percentile(df_snapshot['PC2'], [1, 99])
+        df_trimmed = df_snapshot[
+            (df_snapshot['PC2'] >= lower_pc2) & (df_snapshot['PC2'] <= upper_pc2)
+        ]
 
-    # PCA Plot: Legacy Segment
-    plt.figure(figsize=(10, 6))
-    sns.scatterplot(
-        data=df_snapshot,
-        x='PC1',
-        y='PC2',
-        hue=modeling_segment_col,
-        alpha=0.6
-    )
-    plt.title(f'PCA Plot: Legacy Segment ({window[0]}–{window[1]})')
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
+        # Plot side-by-side
+        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+        sns.scatterplot(
+            data=df_trimmed,
+            x='PC1',
+            y='PC2',
+            hue='commitment_segment',
+            alpha=0.5,
+            ax=axes[0],
+            edgecolor='black',
+            linewidth=0.2
+        )
+        axes[0].set_title(f'Commitment Segment (PCA) - {window_label}')
+        axes[0].grid(True)
 
-# Example usage:
-# visualize_pca_segments(agg_df)
+        sns.scatterplot(
+            data=df_trimmed,
+            x='PC1',
+            y='PC2',
+            hue=modeling_segment_col,
+            alpha=0.5,
+            ax=axes[1],
+            edgecolor='black',
+            linewidth=0.2
+        )
+        axes[1].set_title(f'Legacy Segment (PCA) - {window_label}')
+        axes[1].grid(True)
+
+        plt.tight_layout()
+        plt.show()
