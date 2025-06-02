@@ -1,3 +1,48 @@
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+def plot_credit_scatter_segmentations(df, features=['RISK_RATING', 'outstandings_amt']):
+    # Drop rows with missing values in selected features
+    df_clean = df.dropna(subset=features + ['commitments_amt', 'MODELING_SEGMENT'])
+
+    # Commitment-based segment
+    df_clean['commitment_segment'] = df_clean['commitments_amt'].apply(
+        lambda x: '≤3MM' if x <= 3_000_000 else '>3MM'
+    )
+
+    # Plot 1: Commitment-based segmentation
+    plt.figure(figsize=(10, 6))
+    sns.scatterplot(
+        data=df_clean,
+        x=features[0],
+        y=features[1],
+        hue='commitment_segment',
+        alpha=0.6
+    )
+    plt.title('Scatter Plot: Credit Features by Commitment-Based Segmentation')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+    # Plot 2: Legacy segmentation
+    plt.figure(figsize=(10, 6))
+    sns.scatterplot(
+        data=df_clean,
+        x=features[0],
+        y=features[1],
+        hue='MODELING_SEGMENT',
+        alpha=0.6
+    )
+    plt.title('Scatter Plot: Credit Features by Legacy Segmentation')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+# To use:
+# plot_credit_scatter_segmentations(agg_df, features=['RISK_RATING', 'outstandings_amt'])
+
+
+
 import pandas as pd
 import numpy as np
 from sklearn.decomposition import PCA
