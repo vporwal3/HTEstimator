@@ -1,96 +1,101 @@
+import pandas as pd
+import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
 
-def plot_credit_scatter_segmentations(df, features=['RISK_RATING', 'outstandings_amt']):
-    # Drop rows with missing values in selected features
-    df_clean = df.dropna(subset=features + ['commitments_amt', 'MODELING_SEGMENT'])
+def visualize_credit_segments_panel(
+    df,
+    features=['RISK_RATING', 'outstandings_amt'],
+    date_col='prd_d',
+    id_col='merged_src_ip_id',
+    segment_col='commitments_amt',
+    modeling_segment_col='MODELING_SEGMENT',
+    window=(2014, 2017),
+    segment_cutoff=3_000_000
+):
+    df = df.copy()
+    df[date_col] = pd.to_datetime(df[date_col])
+    df['year'] = df[date_col].dt.year
 
-    # Commitment-based segment
-    df_clean['commitment_segment'] = df_clean['commitments_amt'].apply(
-        lambda x: '≤3MM' if x <= 3_000_000 else '>3MM'
+    # Filter window and select one record per obligor
+    df_window = df[(df['year'] >= window[0]) & (df['year'] <= window[1])]
+    df_snapshot = df_window.sort_values(date_col).groupby(id_col).first().reset_index()
+
+    # Drop missing values
+    df_snapshot = df_snapshot.dropna(subset=features + [segment_col, modeling_segment_col])
+
+    # Create segment columns
+    df_snapshot['commitment_segment'] = df_snapshot[segment_col].apply(
+        lambda x: '≤3MM' if x <= segment_cutoff else '>3MM'
     )
 
-    # Plot 1: Commitment-based segmentation
+    # Scatter Plot (Commitment-Based)
     plt.figure(figsize=(10, 6))
     sns.scatterplot(
-        data=df_clean,
+        data=df_snapshot,
         x=features[0],
         y=features[1],
         hue='commitment_segment',
-        alpha=0.6
+        alpha=0.5,
+        edgecolor=None
     )
-    plt.title('Scatter Plot: Credit Features by Commitment-Based Segmentation')
+    plt.title(f'Scatter: Commitment Segment ({window[0]}–{window[1]})')
     plt.grid(True)
     plt.tight_layout()
     plt.show()
 
-    # Plot 2: Legacy segmentation
+    # Scatter Plot (Legacy Segment)
     plt.figure(figsize=(10, 6))
     sns.scatterplot(
-        data=df_clean,
+        data=df_snapshot,
         x=features[0],
         y=features[1],
-        hue='MODELING_SEGMENT',
+        hue=modeling_segment_col,
+        alpha=0.5,
+        edgecolor=None
+    )
+    plt.title(f'Scatter: Legacy Segment ({window[0]}–{window[1]})')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+    # KDE Plot (Commitment-Based)
+    plt.figure(figsize=(10, 6))
+    sns.kdeplot(
+        data=df_snapshot,
+        x=features[0],
+        y=features[1],
+        hue='commitment_segment',
+        fill=True,
+        alpha=0.5
+    )
+    plt.title(f'Density Plot: Commitment Segment ({window[0]}–{window[1]})')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+    # PCA Plot
+    X = df_snapshot[features].values
+    X_scaled = StandardScaler().fit_transform(X)
+    pca = PCA(n_components=2)
+    X_pca = pca.fit_transform(X_scaled)
+    df_snapshot['PC1'] = X_pca[:, 0]
+    df_snapshot['PC2'] = X_pca[:, 1]
+
+    plt.figure(figsize=(10, 6))
+    sns.scatterplot(
+        data=df_snapshot,
+        x='PC1',
+        y='PC2',
+        hue='commitment_segment',
         alpha=0.6
     )
-    plt.title('Scatter Plot: Credit Features by Legacy Segmentation')
+    plt.title(f'PCA Plot: Commitment Segment ({window[0]}–{window[1]})')
     plt.grid(True)
     plt.tight_layout()
     plt.show()
 
-# To use:
-# plot_credit_scatter_segmentations(agg_df, features=['RISK_RATING', 'outstandings_amt'])
-
-
-
-import pandas as pd
-import numpy as np
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
-import matplotlib.pyplot as plt
-import seaborn as sns
-
-# Simulated agg_df structure for context (real data to be passed when available)
-# agg_df = pd.read_csv('your_file.csv')  # assumed to be already loaded
-
-def pca_from_agg_df(
-    agg_df,
-    features=['RISK_RATING', 'outstandings_amt'],
-    commitment_col='commitments_amt',
-    commitment_cutoff=3_000_000
-):
-    # Step 1: Preprocess
-    df = agg_df.copy()
-    df = df[df[commitment_col] > 0]  # remove invalid/negative commitments
-    df = df.dropna(subset=features)  # drop rows with missing features
-
-    # Step 2: Define segments
-    df['segment'] = df[commitment_col].apply(
-        lambda x: f'≤{commitment_cutoff/1e6:.0f}MM' if x <= commitment_cutoff else f'>{commitment_cutoff/1e6:.0f}MM'
-    )
-
-    # Step 3: Standardize and run PCA
-    scaler = StandardScaler()
-    X_scaled = scaler.fit_transform(df[features])
-    pca = PCA(n_components=2)
-    pca_result = pca.fit_transform(X_scaled)
-
-    # Add PCA results to DataFrame
-    df['PCA1'] = pca_result[:, 0]
-    df['PCA2'] = pca_result[:, 1]
-
-    # Step 4: Plot
-    plt.figure(figsize=(10, 6))
-    sns.scatterplot(data=df, x='PCA1', y='PCA2', hue='segment', alpha=0.6)
-    plt.title('PCA of Credit Variables (All Records)')
-    plt.xlabel('Principal Component 1')
-    plt.ylabel('Principal Component 2')
-    plt.legend(title='Commitment Segment')
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-
-    return df[['PCA1', 'PCA2', 'segment'] + features]
-
-# To use:
-# pca_from_agg_df(agg_df, features=['RISK_RATING', 'outstandings_amt'])
+# Example usage:
+# visualize_credit_segments_panel(agg_df)
