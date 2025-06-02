@@ -1,55 +1,51 @@
 import pandas as pd
 import numpy as np
-from scipy.stats import mannwhitneyu
+from sklearn.decomposition import PCA
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+import seaborn as sns
 
-def run_mannwhitney_by_window(
-    df,
-    var_list,
-    segment_col='commitments_amt',
-    segment_cutoff=3_000_000,
-    window_list=[(2003, 2005), (2006, 2009), (2010, 2013), (2014, 2017), (2018, 2021), (2022, 2024)],
-    date_col='prd_d',
-    obligor_id_col='merged_src_ip_id'
+# Simulated agg_df structure for context (real data to be passed when available)
+# agg_df = pd.read_csv('your_file.csv')  # assumed to be already loaded
+
+def pca_from_agg_df(
+    agg_df,
+    features=['RISK_RATING', 'outstandings_amt'],
+    commitment_col='commitments_amt',
+    commitment_cutoff=3_000_000
 ):
-    df = df.copy()
-    df[date_col] = pd.to_datetime(df[date_col])
-    df['year'] = df[date_col].dt.year
+    # Step 1: Preprocess
+    df = agg_df.copy()
+    df = df[df[commitment_col] > 0]  # remove invalid/negative commitments
+    df = df.dropna(subset=features)  # drop rows with missing features
 
-    results = []
+    # Step 2: Define segments
+    df['segment'] = df[commitment_col].apply(
+        lambda x: f'≤{commitment_cutoff/1e6:.0f}MM' if x <= commitment_cutoff else f'>{commitment_cutoff/1e6:.0f}MM'
+    )
 
-    for start_year, end_year in window_list:
-        window_label = f"{start_year}-{end_year}"
+    # Step 3: Standardize and run PCA
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(df[features])
+    pca = PCA(n_components=2)
+    pca_result = pca.fit_transform(X_scaled)
 
-        # Filter data for window
-        window_data = df[(df['year'] >= start_year) & (df['year'] <= end_year)].copy()
-        t0_df = window_data.sort_values(date_col).groupby(obligor_id_col).first().reset_index()
+    # Add PCA results to DataFrame
+    df['PCA1'] = pca_result[:, 0]
+    df['PCA2'] = pca_result[:, 1]
 
-        # Drop rows with missing values in test variables
-        t0_df = t0_df[
-            (t0_df[segment_col] > 0) &
-            t0_df[var_list].notnull().all(axis=1)
-        ]
+    # Step 4: Plot
+    plt.figure(figsize=(10, 6))
+    sns.scatterplot(data=df, x='PCA1', y='PCA2', hue='segment', alpha=0.6)
+    plt.title('PCA of Credit Variables (All Records)')
+    plt.xlabel('Principal Component 1')
+    plt.ylabel('Principal Component 2')
+    plt.legend(title='Commitment Segment')
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
 
-        # Define segment (<=cutoff vs >cutoff)
-        t0_df['segment'] = t0_df[segment_col].apply(lambda x: f'≤{segment_cutoff/1e6:.0f}MM' if x <= segment_cutoff else f'>{segment_cutoff/1e6:.0f}MM')
+    return df[['PCA1', 'PCA2', 'segment'] + features]
 
-        # Split into groups
-        group_low = t0_df[t0_df['segment'].str.startswith('≤')]
-        group_high = t0_df[t0_df['segment'].str.startswith('>')]
-
-        # Mann-Whitney test function
-        def safe_mw(x1, x2):
-            try:
-                stat, p = mannwhitneyu(x1, x2, alternative='two-sided')
-                return p
-            except:
-                return np.nan
-
-        row_result = {'window': window_label}
-        for var in var_list:
-            p_val = safe_mw(group_low[var], group_high[var])
-            row_result[f"mw_p_{var}"] = p_val
-
-        results.append(row_result)
-
-    return pd.DataFrame(results)
+# To use:
+# pca_from_agg_df(agg_df, features=['RISK_RATING', 'outstandings_amt'])
