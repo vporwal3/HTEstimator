@@ -1,3 +1,40 @@
+WITH base_data AS (
+  SELECT
+    EXTRACT(YEAR FROM SNAPSHOT_DT) AS YEAR,
+    EXTRACT(MONTH FROM SNAPSHOT_DT) AS MONTH,
+    HIGH_LEVEL_CATGRY_DESCR,
+    CR_OR_DB_CODE,
+    BORROWER_NAME,
+    TRAN_AMT
+  FROM
+    `your_project.your_dataset.your_table`
+),
+
+borrower_stats AS (
+  SELECT
+    YEAR,
+    HIGH_LEVEL_CATGRY_DESCR,
+    CR_OR_DB_CODE,
+    BORROWER_NAME,
+    COUNT(*) AS TXN_COUNT,
+    COUNT(DISTINCT MONTH) AS ACTIVE_MONTHS,
+    AVG(TRAN_AMT) AS AVG_TRAN_AMT
+  FROM
+    base_data
+  GROUP BY
+    YEAR, HIGH_LEVEL_CATGRY_DESCR, CR_OR_DB_CODE, BORROWER_NAME
+)
+
+SELECT
+  *,
+  SAFE_DIVIDE(TXN_COUNT, ACTIVE_MONTHS) AS TXN_PER_MONTH
+FROM
+  borrower_stats
+
+
+
+
+
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
