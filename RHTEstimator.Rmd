@@ -1,3 +1,7 @@
+
+Fits a separate model for each feature and ranks them by performance metrics (e.g., AUC, Brier score). Helps identify which features have strong individual predictive signal for PD.
+
+
 Category	
 EDA Method
 Description
