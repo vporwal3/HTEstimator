@@ -1,3 +1,38 @@
+Category	
+EDA Method
+Description
+Univariate analysis
+Box Plot	Visualizes the distribution and outliers of individual numeric features. Helps identify skewness, extreme values, and differences across subgroups (e.g., defaulters vs non-defaulters).
+Univariate analysis
+Density KDE Plot
+Provides a smoothed distribution curve of a feature. Useful to compare distribution shapes for defaulters vs non-defaulters and detect potential data leakage or need for transformation.
+Univariate analysis
+Violin Plot
+Combines KDE and box plot for richer visualization. Helps assess both the distribution shape and summary stats (median, IQR) by target class.
+Feature-target relationship
+Log of Odds Plot (Single Var)
+Fits a univariate model, bins predictions, and compares actual vs predicted log-odds across feature values. Evaluates if the variable has a smooth, monotonic relationship with PD and if model calibration works.
+Feature-target relationship
+WOE Binning
+Groups a continuous/categorical feature into bins and calculates Weight of Evidence (WOE) and target rates. Helps assess separation power and suitability for logistic regression.
+Multivariate & feature selection
+Correlation Matrix
+Examines pairwise linear relationships between features. Identifies multicollinearity, redundant features, and potential confounders.
+Multivariate & feature selection
+SFA (Stepwise Feature Addition)
+Iteratively adds features based on performance gain. Helps identify the most informative variables when added to a base model.
+Multivariate & feature selection
+RFE (Recursive Feature Elimination)
+Eliminates least important features iteratively using a model. Helps identify a ranked subset of features with the most predictive power.
+Missing value
+Missing Value Heatmap / Count
+Visualizes
+
+
+
+
+
+
 CASE
   WHEN AVG(TRAN_AMT) < 100000 THEN "< $100K"
   WHEN AVG(TRAN_AMT) < 250000 THEN "$100K–$250K"
