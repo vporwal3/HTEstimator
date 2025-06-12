@@ -13,6 +13,34 @@ The source data is panel-structured: each obligor has multiple time-indexed reco
 
 ### Design of the Rolling Window Framework
 
+2.2 Design of the Rolling Window Framework
+
+To ensure statistical rigor while maintaining temporal relevance, we implemented a rolling window framework. This approach addresses the panel nature of the data and avoids inflation of sample size by collapsing each obligor’s history into a single, time-aligned record per period.
+
+Before finalizing the windows, we conducted an exploratory analysis of new default activity using a histogram of obligors newly defaulting each year. This allowed us to identify macroeconomic inflection points — such as spikes around the 2008 financial crisis or COVID-era instability — and group years into windows that align with distinct economic cycles.
+
+We defined the following six rolling windows, each spanning 4 years:
+	•	2003–2005: Pre-GFC expansion
+	•	2006–2009: Global Financial Crisis
+	•	2010–2013: Post-GFC recovery
+	•	2014–2017: Stable low-rate environment
+	•	2018–2021: Pandemic and stimulus period
+	•	2022–2024: Inflationary tightening and normalization
+
+Within each window:
+	•	We extract the first observed record (T₀) per obligor
+	•	We assess feature values at T₀ (e.g., risk rating, commitment, outstandings)
+	•	We track default behavior within 12 months following T₀
+
+This framework enables:
+	•	Consistent alignment of features and outcomes
+	•	One-time sampling per obligor per window
+	•	Comparability of results across windows
+
+By grounding the windows in empirical default behavior and aligning them with macroeconomic phases, this structure ensures that segmentation performance is evaluated not just in aggregate, but across varying credit environments.
+
+
+
 We divide the full dataset (2003–2024) into consecutive **rolling windows**, each spanning four years:
 - 2003–2005
 - 2006–2009
