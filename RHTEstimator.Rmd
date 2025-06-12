@@ -1,3 +1,5 @@
+There is no statistically significant difference in default rates between the ≤3MM and >3MM commitment segments.
+
 χ² = ∑ ((O_ij - E_ij)^2) / E_ij
 
 
