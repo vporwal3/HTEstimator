@@ -1,3 +1,6 @@
+\chi^2 = \sum \frac{(O_{ij} - E_{ij})^2}{E_{ij}}
+
+
 ## 4. Framework: Rolling Window Design
 
 ### Purpose
