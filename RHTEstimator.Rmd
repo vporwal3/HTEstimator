@@ -89,3 +89,98 @@ Model Risk Report: Statistical Justification for Commitment-Based Segmentation
 	•	Cramér’s V formula
 	•	Details on variable scaling
 	•	Reference materials or literature
+
+
+
+
+Model Risk Report: Statistical Justification for Commitment-Based Segmentation
+
+1. Executive Summary
+	•	Purpose of segmentation
+	•	Summary of methodology and findings
+	•	Final recommendation
+
+⸻
+
+2. Background and Motivation
+	•	Legacy segmentation strategy overview
+	•	Rationale for exploring commitment-based segmentation
+	•	Regulatory and business context
+
+⸻
+
+3. Data Overview
+	•	Source of data and structure (panel nature, time span)
+	•	Key fields used (commitment, defaults, credit features)
+	•	Preprocessing and filtering rules
+	•	Removal of invalid/negative commitments
+	•	Handling of obligors with no defaults
+	•	Rolling up to obligor level
+
+⸻
+
+4. Framework: Rolling Window Design
+	•	Justification for rolling window
+	•	Description of economic windows used
+	•	Why fixed T₀ snapshots per window
+	•	How windows align with macro trends
+	•	Diagram of the pipeline (optional)
+
+⸻
+
+5. Method 1: Chi-Squared Test on Default Rates
+	•	Purpose of the test
+	•	Hypothesis formulation
+	•	Construction of contingency table
+	•	Assumptions and limitations
+	•	Summary table of results by window
+	•	Interpretation of test statistics
+	•	Visualizations: bar plots / Cramér’s V
+
+⸻
+
+6. Method 2: Mann–Whitney U Test on Credit Drivers
+	•	Rationale for non-parametric comparison
+	•	Selection of variables (Risk Rating, Outstanding Amt, etc.)
+	•	Hypothesis setup for each variable
+	•	Segment-specific analysis (≤3MM vs >3MM)
+	•	Summary of p-values across windows
+	•	Limitations (e.g., cannot be used for >2 groups)
+	•	Visual comparisons (boxplots or violin plots)
+
+⸻
+
+7. Method 3: PCA-Based Decomposition
+	•	Purpose: Visual structural separation of segments
+	•	Feature selection (scaled risk variables)
+	•	Technical steps of PCA
+	•	Explanation of principal components
+	•	Plots: PCA by window (side-by-side for Commitment vs. Legacy)
+	•	Interpretation of observed separation
+	•	Handling outliers and overlap
+	•	Summary of findings
+
+⸻
+
+8. Comparative Analysis
+	•	Method-by-method comparison: commitment vs legacy
+	•	Tradeoffs: parsimony vs. complexity
+	•	Segment quality: size, default distribution, interpretability
+	•	Model performance (optional if you ran PD models)
+
+⸻
+
+9. Conclusions and Recommendations
+	•	Final summary of statistical evidence
+	•	Does segmentation based on commitment make sense?
+	•	When it works better (or not)
+	•	Business and model development implications
+
+⸻
+
+10. Appendix
+	•	Full test statistics and results
+	•	Code snippets (optional)
+	•	Cramér’s V formula
+	•	Details on variable scaling
+	•	Reference materials or literature
