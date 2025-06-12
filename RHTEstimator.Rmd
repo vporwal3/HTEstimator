@@ -1,283 +1,91 @@
-final_list = feature_list[feature_list['seg'] == seg]
+Model Risk Report: Statistical Justification for Commitment-Based Segmentation
 
-# Drop unwanted vars for this segment if any
-if seg in vars_to_drop:
-    final_list = final_list[~final_list['var'].isin(vars_to_drop[seg])]
+1. Executive Summary
+	•	Purpose of segmentation
+	•	Summary of methodology and findings
+	•	Final recommendation
 
+⸻
 
-feature_list = pd.read_csv('data/final_features.csv')
+2. Background and Motivation
+	•	Legacy segmentation strategy overview
+	•	Rationale for exploring commitment-based segmentation
+	•	Regulatory and business context
 
-# Drop specific variables
-vars_to_drop = ['VAR_ABC', 'VAR_DEF']
-feature_list = feature_list[~feature_list['var'].isin(vars_to_drop)]
+⸻
 
-Random Forest Feature Importance
-Ranks features based on impurity or permutation importance. Captures nonlinear interactions and works well even with noisy or correlated inputs.
+3. Data Overview
+	•	Source of data and structure (panel nature, time span)
+	•	Key fields used (commitment, defaults, credit features)
+	•	Preprocessing and filtering rules
+	•	Removal of invalid/negative commitments
+	•	Handling of obligors with no defaults
+	•	Rolling up to obligor level
 
+⸻
 
-Fits a separate model for each feature and ranks them by performance metrics (e.g., AUC, Brier score). Helps identify which features have strong individual predictive signal for PD.
+4. Framework: Rolling Window Design
+	•	Justification for rolling window
+	•	Description of economic windows used
+	•	Why fixed T₀ snapshots per window
+	•	How windows align with macro trends
+	•	Diagram of the pipeline (optional)
 
+⸻
 
-Category	
-EDA Method
-Description
-Univariate analysis
-Box Plot	Visualizes the distribution and outliers of individual numeric features. Helps identify skewness, extreme values, and differences across subgroups (e.g., defaulters vs non-defaulters).
-Univariate analysis
-Density KDE Plot
-Provides a smoothed distribution curve of a feature. Useful to compare distribution shapes for defaulters vs non-defaulters and detect potential data leakage or need for transformation.
-Univariate analysis
-Violin Plot
-Combines KDE and box plot for richer visualization. Helps assess both the distribution shape and summary stats (median, IQR) by target class.
-Feature-target relationship
-Log of Odds Plot (Single Var)
-Fits a univariate model, bins predictions, and compares actual vs predicted log-odds across feature values. Evaluates if the variable has a smooth, monotonic relationship with PD and if model calibration works.
-Feature-target relationship
-WOE Binning
-Groups a continuous/categorical feature into bins and calculates Weight of Evidence (WOE) and target rates. Helps assess separation power and suitability for logistic regression.
-Multivariate & feature selection
-Correlation Matrix
-Examines pairwise linear relationships between features. Identifies multicollinearity, redundant features, and potential confounders.
-Multivariate & feature selection
-SFA (Stepwise Feature Addition)
-Iteratively adds features based on performance gain. Helps identify the most informative variables when added to a base model.
-Multivariate & feature selection
-RFE (Recursive Feature Elimination)
-Eliminates least important features iteratively using a model. Helps identify a ranked subset of features with the most predictive power.
-Missing value
-Missing Value Heatmap / Count
-Visualizes
+5. Method 1: Chi-Squared Test on Default Rates
+	•	Purpose of the test
+	•	Hypothesis formulation
+	•	Construction of contingency table
+	•	Assumptions and limitations
+	•	Summary table of results by window
+	•	Interpretation of test statistics
+	•	Visualizations: bar plots / Cramér’s V
 
+⸻
 
+6. Method 2: Mann–Whitney U Test on Credit Drivers
+	•	Rationale for non-parametric comparison
+	•	Selection of variables (Risk Rating, Outstanding Amt, etc.)
+	•	Hypothesis setup for each variable
+	•	Segment-specific analysis (≤3MM vs >3MM)
+	•	Summary of p-values across windows
+	•	Limitations (e.g., cannot be used for >2 groups)
+	•	Visual comparisons (boxplots or violin plots)
 
+⸻
 
+7. Method 3: PCA-Based Decomposition
+	•	Purpose: Visual structural separation of segments
+	•	Feature selection (scaled risk variables)
+	•	Technical steps of PCA
+	•	Explanation of principal components
+	•	Plots: PCA by window (side-by-side for Commitment vs. Legacy)
+	•	Interpretation of observed separation
+	•	Handling outliers and overlap
+	•	Summary of findings
 
+⸻
 
-CASE
-  WHEN AVG(TRAN_AMT) < 100000 THEN "< $100K"
-  WHEN AVG(TRAN_AMT) < 250000 THEN "$100K–$250K"
-  WHEN AVG(TRAN_AMT) < 500000 THEN "$250K–$500K"
-  WHEN AVG(TRAN_AMT) < 1000000 THEN "$500K–$1M"
-  WHEN AVG(TRAN_AMT) < 5000000 THEN "$1M–$5M"
-  WHEN AVG(TRAN_AMT) < 10000000 THEN "$5M–$10M"
-  ELSE "$10M+"
-END
+8. Comparative Analysis
+	•	Method-by-method comparison: commitment vs legacy
+	•	Tradeoffs: parsimony vs. complexity
+	•	Segment quality: size, default distribution, interpretability
+	•	Model performance (optional if you ran PD models)
 
+⸻
 
+9. Conclusions and Recommendations
+	•	Final summary of statistical evidence
+	•	Does segmentation based on commitment make sense?
+	•	When it works better (or not)
+	•	Business and model development implications
 
-WITH base_data AS (
-  SELECT
-    EXTRACT(YEAR FROM SNAPSHOT_DT) AS YEAR,
-    EXTRACT(MONTH FROM SNAPSHOT_DT) AS MONTH,
-    HIGH_LEVEL_CATGRY_DESCR,
-    CR_OR_DB_CODE,
-    BORROWER_NAME,
-    TRAN_AMT
-  FROM
-    `your_project.your_dataset.your_table`
-),
+⸻
 
-borrower_stats AS (
-  SELECT
-    YEAR,
-    HIGH_LEVEL_CATGRY_DESCR,
-    CR_OR_DB_CODE,
-    BORROWER_NAME,
-    COUNT(*) AS TXN_COUNT,
-    COUNT(DISTINCT MONTH) AS ACTIVE_MONTHS,
-    AVG(TRAN_AMT) AS AVG_TRAN_AMT
-  FROM
-    base_data
-  GROUP BY
-    YEAR, HIGH_LEVEL_CATGRY_DESCR, CR_OR_DB_CODE, BORROWER_NAME
-)
-
-SELECT
-  *,
-  SAFE_DIVIDE(TXN_COUNT, ACTIVE_MONTHS) AS TXN_PER_MONTH
-FROM
-  borrower_stats
-
-
-
-
-
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
-
-def visualize_credit_segments_panel(
-    df,
-    features=['RISK_RATING', 'outstandings_amt'],
-    date_col='prd_d',
-    id_col='merged_src_ip_id',
-    segment_col='commitments_amt',
-    modeling_segment_col='MODELING_SEGMENT',
-    window=(2014, 2017),
-    segment_cutoff=3_000_000
-):
-    df = df.copy()
-    df[date_col] = pd.to_datetime(df[date_col])
-    df['year'] = df[date_col].dt.year
-
-    # Filter window and select one record per obligor
-    df_window = df[(df['year'] >= window[0]) & (df['year'] <= window[1])]
-    df_snapshot = df_window.sort_values(date_col).groupby(id_col).first().reset_index()
-
-    # Drop missing values
-    df_snapshot = df_snapshot.dropna(subset=features + [segment_col, modeling_segment_col])
-
-    # Create segment columns
-    df_snapshot['commitment_segment'] = df_snapshot[segment_col].apply(
-        lambda x: '≤3MM' if x <= segment_cutoff else '>3MM'
-    )
-
-    # Scatter Plot (Commitment-Based)
-    plt.figure(figsize=(10, 6))
-    sns.scatterplot(
-        data=df_snapshot,
-        x=features[0],
-        y=features[1],
-        hue='commitment_segment',
-        alpha=0.5,
-        edgecolor=None
-    )
-    plt.title(f'Scatter: Commitment Segment ({window[0]}–{window[1]})')
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-
-    # Scatter Plot (Legacy Segment)
-    plt.figure(figsize=(10, 6))
-    sns.scatterplot(
-        data=df_snapshot,
-        x=features[0],
-        y=features[1],
-        hue=modeling_segment_col,
-        alpha=0.5,
-        edgecolor=None
-    )
-    plt.title(f'Scatter: Legacy Segment ({window[0]}–{window[1]})')
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-
-    # KDE Plot (Commitment-Based)
-    plt.figure(figsize=(10, 6))
-    sns.kdeplot(
-        data=df_snapshot,
-        x=features[0],
-        y=features[1],
-        hue='commitment_segment',
-        fill=True,
-        alpha=0.5
-    )
-    plt.title(f'Density Plot: Commitment Segment ({window[0]}–{window[1]})')
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-
-    # PCA Plot
-    X = df_snapshot[features].values
-    X_scaled = StandardScaler().fit_transform(X)
-    pca = PCA(n_components=2)
-    X_pca = pca.fit_transform(X_scaled)
-    df_snapshot['PC1'] = X_pca[:, 0]
-    df_snapshot['PC2'] = X_pca[:, 1]
-
-    plt.figure(figsize=(10, 6))
-    sns.scatterplot(
-        data=df_snapshot,
-        x='PC1',
-        y='PC2',
-        hue='commitment_segment',
-        alpha=0.6
-    )
-    plt.title(f'PCA Plot: Commitment Segment ({window[0]}–{window[1]})')
-    plt.grid(True)
-    plt.tight_layout()
-    plt.show()
-
-# Example usage:
-# visualize_credit_segments_panel(agg_df)
-
-
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.decomposition import PCA
-from sklearn.preprocessing import StandardScaler
-
-def visualize_pca_all_windows(
-    df,
-    features=['RISK_RATING', 'outstandings_amt'],
-    date_col='prd_d',
-    id_col='merged_src_ip_id',
-    segment_col='commitments_amt',
-    modeling_segment_col='MODELING_SEGMENT',
-    segment_cutoff=3_000_000,
-    window_list=[(2003, 2005), (2006, 2009), (2010, 2013), (2014, 2017), (2018, 2021), (2022, 2024)]
-):
-    df = df.copy()
-    df[date_col] = pd.to_datetime(df[date_col])
-    df['year'] = df[date_col].dt.year
-
-    for start_year, end_year in window_list:
-        window_label = f"{start_year}-{end_year}"
-        df_window = df[(df['year'] >= start_year) & (df['year'] <= end_year)]
-        df_snapshot = df_window.sort_values(date_col).groupby(id_col).first().reset_index()
-        df_snapshot = df_snapshot.dropna(subset=features + [segment_col, modeling_segment_col])
-
-        df_snapshot['commitment_segment'] = df_snapshot[segment_col].apply(
-            lambda x: '≤3MM' if x <= segment_cutoff else '>3MM'
-        )
-
-        # PCA
-        X = df_snapshot[features].values
-        X_scaled = StandardScaler().fit_transform(X)
-        pca = PCA(n_components=2)
-        X_pca = pca.fit_transform(X_scaled)
-
-        df_snapshot['PC1'] = X_pca[:, 0]
-        df_snapshot['PC2'] = X_pca[:, 1]
-
-        # Trim PCA outliers
-        lower_pc2, upper_pc2 = np.percentile(df_snapshot['PC2'], [1, 99])
-        df_trimmed = df_snapshot[
-            (df_snapshot['PC2'] >= lower_pc2) & (df_snapshot['PC2'] <= upper_pc2)
-        ]
-
-        # Plot side-by-side
-        fig, axes = plt.subplots(1, 2, figsize=(16, 6))
-        sns.scatterplot(
-            data=df_trimmed,
-            x='PC1',
-            y='PC2',
-            hue='commitment_segment',
-            alpha=0.5,
-            ax=axes[0],
-            edgecolor='black',
-            linewidth=0.2
-        )
-        axes[0].set_title(f'Commitment Segment (PCA) - {window_label}')
-        axes[0].grid(True)
-
-        sns.scatterplot(
-            data=df_trimmed,
-            x='PC1',
-            y='PC2',
-            hue=modeling_segment_col,
-            alpha=0.5,
-            ax=axes[1],
-            edgecolor='black',
-            linewidth=0.2
-        )
-        axes[1].set_title(f'Legacy Segment (PCA) - {window_label}')
-        axes[1].grid(True)
-
-        plt.tight_layout()
-        plt.show()
+10. Appendix
+	•	Full test statistics and results
+	•	Code snippets (optional)
+	•	Cramér’s V formula
+	•	Details on variable scaling
+	•	Reference materials or literature
