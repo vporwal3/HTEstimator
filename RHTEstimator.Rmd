@@ -1,3 +1,171 @@
+## 4. Framework: Rolling Window Design
+
+### Purpose
+
+To ensure statistical validity and avoid overstating significance, we apply all segmentation tests using a **rolling window methodology**. This framework addresses the panel nature of the data and aligns analysis with changing macroeconomic cycles.
+
+### Panel Structure and Motivation
+
+The source data is panel-structured: each obligor has multiple time-indexed records. Conducting statistical tests on this directly would:
+- Violate the assumption of independent observations
+- Inflate sample size by duplicating obligors across time
+- Introduce bias from events (e.g., default) that may occur long after the initial risk profile
+
+### Design of the Rolling Window Framework
+
+We divide the full dataset (2003–2024) into consecutive **rolling windows**, each spanning four years:
+- 2003–2005
+- 2006–2009
+- 2010–2013
+- 2014–2017
+- 2018–2021
+- 2022–2024
+
+These were chosen to **capture full economic cycles**, including pre-crisis, crisis, recovery, and post-pandemic periods.
+
+Within each window:
+- For each obligor, we identify the **first active snapshot** (T₀)
+- Use that T₀ record to extract credit features
+- Track whether the obligor **defaulted in the next 12 months** following T₀
+
+This ensures:
+- One record per obligor per window
+- Alignment of features and outcomes
+- Testing is repeated across different market conditions for stability
+
+---
+
+## 5. Method 1: Chi-Squared Test on Default Rates
+
+### Objective
+
+To test whether **default rates differ significantly** between segments (≤3MM vs >3MM), across time windows.
+
+### Methodology
+
+For each rolling window, we build a **2x2 contingency table** of default outcomes:
+
+| Segment | Default (1) | No Default (0) |
+|---------|-------------|----------------|
+| ≤ 3MM   |      a      |       b        |
+| > 3MM   |      c      |       d        |
+
+We apply a **Chi-squared test of independence**:
+
+
+
+χ² = ∑ ((Oᵢⱼ - Eᵢⱼ)² / Eᵢⱼ)
+
+Where:
+- *Oᵢⱼ* is the observed frequency
+- *Eᵢⱼ* is the expected frequency under the assumption of independence
+
+### Hypotheses
+
+- **H₀ (Null):** Default rates are independent of commitment segment  
+- **H₁ (Alt):** Default rates differ between commitment segments
+
+### Pros
+- Simple and interpretable
+- Applicable to binary outcomes
+- Useful for comparing performance across rolling windows
+
+### Cons
+- Sensitive to low cell counts (sparse defaults)
+- Does not explain *why* default differs
+- Requires binary outcome; no insight into underlying drivers
+
+### [Insert Results Here]
+
+---
+
+## 6. Method 2: Mann–Whitney U Test on Credit Characteristics
+
+### Objective
+
+To test whether the **distributions of key credit features** differ between commitment segments — indicating structural differences in credit risk profiles.
+
+### Variables Analyzed
+
+- **Risk Rating:** Ordinal credit risk classification  
+- **Outstanding Amount:** Continuous exposure measure
+
+These variables reflect key risk characteristics available at origination and distinguish obligor financial scale and quality.
+
+### Methodology
+
+The **Mann–Whitney U Test** compares whether one group tends to have higher values than the other — without assuming normality.
+
+U = min(U₁, U₂), where U₁ = R₁ - n₁(n₁ + 1) / 2
+
+### Hypotheses (for each variable):
+
+- **H₀:** Distribution of variable is the same across segments  
+- **H₁:** Distributions differ significantly between segments
+
+### Pros
+- Non-parametric: handles skewed variables (e.g., outstandings)
+- Appropriate for ordinal and continuous features
+- Highlights structural credit differences
+
+### Cons
+- Only applicable to 2-group segmentation (not legacy)
+- Sensitive to sample imbalance or ties
+- Does not indicate effect size (though Cliff’s delta could be used)
+
+### [Insert Results Here]
+
+---
+
+## 7. Method 3: PCA Decomposition for Structural Validation
+
+### Objective
+
+To visually and analytically assess whether commitment segments naturally form **distinct clusters** in multivariate credit space.
+
+### Methodology
+
+We apply **Principal Component Analysis (PCA)** to a set of scaled credit features:
+- Risk Rating
+- Outstanding Amount
+- Commitment Amount
+- (Optional: Interest Rate)
+
+All features are standardized as:
+
+Z = (x - μ) / σ
+
+PCA projects the data into two orthogonal axes (PC1, PC2) that explain the **maximum variance**. We then visualize obligors in PC1–PC2 space, colored by:
+- Commitment Segment
+- Modeling Segment (for comparison)
+
+### Interpretation
+
+- **If commitment segments cluster separately**, it suggests:
+  - Credit profiles differ structurally
+  - Commitment segmentation aligns with latent credit behavior
+
+- **If legacy segments show overlap**, it supports moving to a simpler, risk-aligned segmentation.
+
+### Pros
+- Reveals underlying structure of credit features
+- Unsupervised (not dependent on outcome)
+- Enables side-by-side visual comparison of segmentation schemes
+
+### Cons
+- PCA is linear and sensitive to outliers
+- Visual inspection is subjective unless supplemented with metrics
+- Segment overlap may reflect model limitations or true similarity
+
+### [Insert Results Here]
+
+
+
+
+
+
+
+
 Background and Motivation
 
 The Commercial and Industrial (C&I) portfolio at [Your Bank Name] has traditionally been segmented into separate modeling populations based on business groupings such as Middle Market, Institutional Banking, and Leasing. Each of these segments historically had its own Probability of Default (PD) model, designed to reflect presumed differences in credit risk behavior across business lines.
