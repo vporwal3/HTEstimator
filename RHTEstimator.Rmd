@@ -1,3 +1,37 @@
+Background and Motivation
+
+The Commercial and Industrial (C&I) portfolio at [Your Bank Name] has traditionally been segmented into separate modeling populations based on business groupings such as Middle Market, Institutional Banking, and Leasing. Each of these segments historically had its own Probability of Default (PD) model, designed to reflect presumed differences in credit risk behavior across business lines.
+
+However, this legacy segmentation strategy, while organizationally intuitive, has notable drawbacks:
+	•	Segment boundaries are operational, not risk-based, and may group together obligors with heterogeneous risk profiles.
+	•	Certain segments have become increasingly thin, especially in volatile periods, weakening model stability and leading to challenges in performance tracking and model governance.
+	•	As obligor behavior shifts with market cycles and underwriting changes, static business-line definitions fail to reflect evolving credit dynamics.
+
+⸻
+
+Motivation for Exploring Commitment-Based Segmentation
+
+To address these limitations, we evaluated an alternative approach: segmenting obligors based on their total commitment amount, using a cutoff of $3MM to define:
+	•	≤ $3MM: Typically smaller businesses with more limited credit access, often exposed to localized economic trends
+	•	> $3MM: Larger, more sophisticated firms with broader access to capital markets and more robust financial disclosures
+
+This segmentation strategy is appealing for several reasons:
+	•	Commitment is a consistent, objective, and readily available measure across all obligors.
+	•	It introduces parsimonious segmentation (2 groups instead of 3–4), reducing model governance complexity.
+	•	From a credit risk perspective, commitment size naturally proxies for borrower scale, financial health, and resource availability.
+	•	Operationally, commitment-based segmentation aligns better with certain regulatory expectations for threshold-based risk differentiation.
+
+⸻
+
+Regulatory and Model Risk Considerations
+
+Any change in segmentation methodology must be justified through a statistically sound framework that demonstrates:
+	•	The new segmentation produces meaningfully different risk profiles
+	•	It captures structural differences in credit behavior
+	•	It performs at least as well as the legacy approach across economic cycles
+
+To that end, we developed a three-phase statistical testing methodology applied across rolling economic windows, which is described in the following sections
+
 Model Risk Report: Statistical Justification for Commitment-Based Segmentation
 
 1. Executive Summary
