@@ -1,3 +1,23 @@
+Cramér’s V: Effect Size for Default Rate Differences
+
+While the Chi-squared test determines whether a statistically significant relationship exists between segment membership (≤3MM vs >3MM) and default outcomes, it does not indicate the strength of that relationship. In large datasets, even small differences in default rates can produce significant p-values — especially when comparing segmentations with different numbers of groups (e.g., 2 vs 3), which results in different degrees of freedom. This makes raw test statistics not directly comparable between the proposed and legacy segmentation schemes.
+
+To address this, we calculate Cramér’s V, a normalized measure of association strength for categorical variables. It ranges from 0 (no association) to 1 (perfect association), and is defined as:
+
+V = \sqrt{\frac{\chi^2}{n \cdot (k - 1)}}
+
+Where:
+	•	\chi^2 = Chi-squared test statistic
+	•	n = total number of observations
+	•	k = the smaller of number of rows or columns in the contingency table
+
+Interpretation Guidelines
+	•	V < 0.10: Weak association
+	•	0.10 \leq V < 0.30: Moderate association
+	•	V \geq 0.30: Strong association
+
+
+
 There is no statistically significant difference in default rates between the ≤3MM and >3MM commitment segments.
 
 χ² = ∑ ((O_ij - E_ij)^2) / E_ij
