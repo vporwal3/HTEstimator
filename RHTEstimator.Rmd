@@ -1,3 +1,63 @@
+def plot_feature_analysis(X, y, feature_name, nbins=10):
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import statsmodels.api as sm
+
+    # Fit GEE model
+    model = sm.GEE(y, X[[feature_name]], groups=X["MDM_ID"], 
+                   cov_struct=sm.cov_struct.Independence(), 
+                   family=sm.families.Binomial()).fit()
+    pred_prob = model.predict(X[[feature_name]])
+
+    # Create and sort dataframe
+    df = pd.DataFrame({
+        'Feature': X[feature_name],
+        'Target': y,
+        'Pred_Prob': pred_prob
+    }).sort_values(by='Feature')
+
+    # Bin settings
+    spacing = round(len(df) / nbins)
+    stop = spacing
+
+    actual_rates = []
+    pred_probs = []
+    avg_x_bin = []
+
+    # Binning loop
+    start = 0
+    for i in range(nbins):
+        if i == nbins - 1:
+            actual_rate = df['Target'][start:].mean()
+            pred_prob_bin = df['Pred_Prob'][start:].mean()
+            avg_x = df['Feature'][start:].mean()
+        else:
+            actual_rate = df['Target'][start:stop].mean()
+            pred_prob_bin = df['Pred_Prob'][start:stop].mean()
+            avg_x = df['Feature'][start:stop].mean()
+
+        actual_rates.append(actual_rate)
+        pred_probs.append(pred_prob_bin)
+        avg_x_bin.append(avg_x)
+
+        start = stop
+        stop += spacing
+
+    # Plot
+    plt.figure(figsize=(10, 6))
+    plt.plot(avg_x_bin, actual_rates, marker='o', label='Actual Target Rate', color='blue')
+    plt.plot(avg_x_bin, pred_probs, marker='x', label='Predicted Probability', color='goldenrod')
+    plt.xlabel(feature_name)
+    plt.ylabel('Target Rate / Predicted Probability')
+    plt.title(f'Target Rate vs. {feature_name}')
+    plt.legend()
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
+
 Cramér’s V: Effect Size for Default Rate Differences
 
 While the Chi-squared test determines whether a statistically significant relationship exists between segment membership (≤3MM vs >3MM) and default outcomes, it does not indicate the strength of that relationship. In large datasets, even small differences in default rates can produce significant p-values — especially when comparing segmentations with different numbers of groups (e.g., 2 vs 3), which results in different degrees of freedom. This makes raw test statistics not directly comparable between the proposed and legacy segmentation schemes.
