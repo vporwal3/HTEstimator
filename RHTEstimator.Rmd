@@ -1,3 +1,67 @@
+def plot_feature_analysis_with_woe_bins(X, y, model_features, plot_feature_name, woe_summary_df):
+    """
+    X: input DataFrame (must contain all model_features and plot_feature_name)
+    y: target variable (Series)
+    model_features: list of feature names to fit the model
+    plot_feature_name: the WOE-transformed feature to plot bin-wise performance for
+    woe_summary_df: dataframe loaded from 'woe_summary.csv'
+    """
+
+    # Fit GEE model using multiple features
+    model = sm.GEE(y, X[model_features], groups=X["MDM_ID"],
+                   cov_struct=sm.cov_struct.Independence(),
+                   family=sm.families.Binomial()).fit()
+    pred_prob = model.predict(X[model_features])
+
+    # Prepare working DataFrame
+    df = pd.DataFrame({
+        'Feature': X[plot_feature_name],
+        'Target': y,
+        'Pred_Prob': pred_prob
+    })
+
+    # Clean WOE bin info
+    bin_map_df = clean_variable_data(woe_summary_df, plot_feature_name)[['Bin', 'Pretty Bin']]
+    bin_map = dict(zip(bin_map_df['Bin'], bin_map_df['Pretty Bin']))
+
+    # Round WOE values for mapping
+    bin_assignments = woe_summary_df[woe_summary_df['Var'] == plot_feature_name][['Bin', 'WoE']].drop_duplicates(subset='WoE')
+    bin_assignments['WoE'] = bin_assignments['WoE'].round(6)
+    bin_dict = dict(zip(bin_assignments['WoE'], bin_assignments['Bin']))
+
+    # Apply mapping
+    df['Bin'] = df['Feature'].round(6).map(bin_dict)
+    df['Pretty Bin'] = df['Bin'].map(bin_map)
+
+    # Drop rows with missing bin
+    df = df.dropna(subset=['Bin', 'Pretty Bin'])
+
+    # Group and aggregate by Bin
+    plot_df = df.groupby(['Bin', 'Pretty Bin']).agg(
+        Actual_Target_Rate=('Target', 'mean'),
+        Predicted_Prob=('Pred_Prob', 'mean')
+    ).reset_index()
+
+    # Sort by numeric order of bin
+    plot_df['SortKey'] = plot_df['Bin'].apply(extract_bin_lower_bound)
+    plot_df = plot_df.sort_values(by='SortKey').drop(columns='SortKey')
+
+    # Plot on single y-axis
+    fig, ax = plt.subplots(figsize=(12, 6))
+    ax.plot(plot_df['Pretty Bin'], plot_df['Actual_Target_Rate'], color='blue', marker='o', label='Actual Target Rate')
+    ax.plot(plot_df['Pretty Bin'], plot_df['Predicted_Prob'], color='orange', marker='x', label='Predicted Probability')
+
+    ax.set_xlabel("Bin")
+    ax.set_ylabel("Probability")
+    ax.set_title(f"Target Rate vs. Bins for {plot_feature_name}")
+    ax.set_xticks(range(len(plot_df)))
+    ax.set_xticklabels(plot_df['Pretty Bin'], rotation=45, ha='right')
+    ax.legend()
+    ax.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
 
 import pandas as pd
 import matplotlib.pyplot as plt
