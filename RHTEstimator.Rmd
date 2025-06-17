@@ -1,3 +1,34 @@
+
+# Unique obligors before merge
+original_obligors = set(agg_df['merged_src_ip_id'].unique())
+
+# Unique obligors in deposit data
+deposit_obligors = set(deposit_df['merged_src_ip_id'].unique())
+
+# How many obligors had deposit data
+matched_obligors = original_obligors.intersection(deposit_obligors)
+
+# Count summary
+print("Original obligors:", len(original_obligors))
+print("Deposit obligors:", len(deposit_obligors))
+print("Matched obligors (retained):", len(matched_obligors))
+print("Obligors dropped (missing in deposit):", len(original_obligors) - len(matched_obligors))
+
+
+# Unique ID-date pairs before and after
+original_pairs = set(zip(agg_df['merged_src_ip_id'], agg_df['prd_d']))
+deposit_pairs = set(zip(deposit_df['merged_src_ip_id'], deposit_df['prd_d']))
+
+matched_pairs = original_pairs.intersection(deposit_pairs)
+
+print("Original ID-date pairs:", len(original_pairs))
+print("Deposit ID-date pairs:", len(deposit_pairs))
+print("Matched pairs (retained):", len(matched_pairs))
+print("Pairs dropped:", len(original_pairs) - len(matched_pairs))
+
+
+
+
 def plot_feature_analysis_with_woe_bins(X, y, model_features, plot_feature_name, woe_summary_df):
     """
     X: input DataFrame (must contain all model_features and plot_feature_name)
