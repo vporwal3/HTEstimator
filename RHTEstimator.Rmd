@@ -1,3 +1,102 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import re
+
+# --- Helper Functions ---
+
+def format_bin_label(bin_str):
+    match = re.findall(r"[-+]?\d*\.\d+|\d+", bin_str)
+    if not match:
+        return bin_str
+    nums = [float(m) for m in match]
+    left_raw = bin_str.strip('()[]').split(',')[0]
+    right_raw = bin_str.strip('()[]').split(',')[1] if ',' in bin_str else ''
+    left_inf = '-inf' in left_raw.lower()
+    right_inf = 'inf' in right_raw.lower()
+
+    def smart_fmt(x):
+        if x >= 1000:
+            return f"{round(x / 1000)}k"
+        elif x.is_integer():
+            return str(int(x))
+        else:
+            return f"{round(x, 2)}"
+
+    if left_inf and not right_inf:
+        return f"≤ {smart_fmt(nums[0])}"
+    elif right_inf and not left_inf:
+        return f"{smart_fmt(nums[0])}+"
+    elif not left_inf and not right_inf:
+        return f"{smart_fmt(nums[0])} - {smart_fmt(nums[1])}"
+    else:
+        return bin_str  # fallback
+
+def clean_variable_data(df, var_name):
+    var_df = df[df['Var'] == var_name].copy()
+    var_df['Bin'] = var_df['Bin'].astype(str).str.strip().str.lower()
+    var_df['Bin'] = var_df['Bin'].replace({'special': 'Before 2020', 'missing': 'No Relationship'})
+    var_df = var_df[~((var_df['Bin'] == 'no relationship') & (var_df['Event rate'] == 0))]
+    var_df['Pretty Bin'] = var_df['Bin'].apply(lambda x: x if x in ['no relationship', 'before 2020'] else format_bin_label(x))
+    return var_df
+
+# --- Final Plot Function ---
+
+def plot_woe_bin_target_rate(var_name, woe_df, actual_df, predicted_probs):
+    """
+    - var_name: name of the variable
+    - woe_df: WOE summary dataframe with bins
+    - actual_df: DataFrame with actual values including WOE-transformed var_name
+    - predicted_probs: predicted probabilities from model (aligned with actual_df)
+    """
+    # Clean bin labels
+    bin_map_df = clean_variable_data(woe_df, var_name)[['Bin', 'Pretty Bin']]
+    bin_map = dict(zip(bin_map_df['Bin'], bin_map_df['Pretty Bin']))
+
+    # Group actual data into bins using WOE values
+    actual_df = actual_df.copy()
+    actual_df['Pred_Prob'] = predicted_probs
+
+    # Get bin assignment from raw WOE value by matching the bin thresholds
+    bin_assignments = woe_df[woe_df['Var'] == var_name][['Bin', 'WoE']]
+    bin_assignments = bin_assignments.drop_duplicates(subset='WoE')
+    bin_dict = dict(zip(bin_assignments['WoE'], bin_assignments['Bin']))
+    actual_df['Bin'] = actual_df[var_name].map(bin_dict)
+    actual_df['Pretty Bin'] = actual_df['Bin'].map(bin_map)
+
+    # Aggregate event rate and predicted prob per bin
+    plot_df = actual_df.groupby('Pretty Bin').agg(
+        Actual_Target_Rate=('Target', 'mean'),
+        Predicted_Prob=('Pred_Prob', 'mean')
+    ).reset_index()
+
+    # Plot
+    plt.figure(figsize=(10, 5))
+    plt.plot(plot_df['Pretty Bin'], plot_df['Actual_Target_Rate'], marker='o', label='Actual Target Rate', color='blue')
+    plt.plot(plot_df['Pretty Bin'], plot_df['Predicted_Prob'], marker='x', label='Predicted Probability', color='goldenrod')
+    plt.xticks(rotation=45, ha='right')
+    plt.xlabel("Bin")
+    plt.ylabel("Rate / Probability")
+    plt.title(f"Target Rate vs {var_name} Bins")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
+# Load WOE summary
+woe_df = pd.read_csv("woe_summary.csv")
+
+# actual_df contains the actual data and must include the WOE-transformed version of var_name
+# For example: actual_df['TOTAL_OUTS'] = WOE transformed values for 'TOTAL_OUTS'
+
+# predicted_probs = model.predict(...)
+
+plot_woe_bin_target_rate('TOTAL_OUTS', woe_df, actual_df, predicted_probs)
+
+
+
+
 def plot_feature_analysis(X, y, feature_name, nbins=10):
     import numpy as np
     import pandas as pd
