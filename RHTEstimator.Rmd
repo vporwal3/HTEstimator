@@ -1,4 +1,12 @@
 
+coverage_check = merged.groupby('merged_src_ip_id')['months_after_t0'].max().reset_index()
+coverage_check['sufficient_coverage'] = coverage_check['months_after_t0'] >= 27
+
+# Merge this flag back into t0_df
+t0_df = t0_df.merge(coverage_check[['merged_src_ip_id', 'sufficient_coverage']], on='merged_src_ip_id')
+t0_df = t0_df[t0_df['sufficient_coverage']
+
+
 # Unique obligors before merge
 original_obligors = set(agg_df['merged_src_ip_id'].unique())
 
