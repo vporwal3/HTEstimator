@@ -1,3 +1,11 @@
+# Round WOE values in bin_dict keys to 6 decimals
+bin_assignments = woe_summary_df[woe_summary_df['Var'] == feature_name][['Bin', 'WoE']].drop_duplicates(subset='WoE')
+bin_assignments['WoE'] = bin_assignments['WoE'].round(6)  # match your data
+bin_dict = dict(zip(bin_assignments['WoE'], bin_assignments['Bin']))
+
+# Apply map after rounding your feature
+df['Bin'] = df['Feature'].round(6).map(bin_dict)
+
 
 import pandas as pd
 import matplotlib.pyplot as plt
