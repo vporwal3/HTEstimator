@@ -1,3 +1,129 @@
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import numpy as np
+import statsmodels.api as sm
+import re
+
+# --- Helper Functions ---
+
+def format_bin_label(bin_str):
+    match = re.findall(r"[-+]?\d*\.\d+|\d+", bin_str)
+    if not match:
+        return bin_str
+    nums = [float(m) for m in match]
+    left_raw = bin_str.strip('()[]').split(',')[0]
+    right_raw = bin_str.strip('()[]').split(',')[1] if ',' in bin_str else ''
+    left_inf = '-inf' in left_raw.lower()
+    right_inf = 'inf' in right_raw.lower()
+
+    def smart_fmt(x):
+        if x >= 1000:
+            return f"{round(x / 1000)}k"
+        elif x.is_integer():
+            return str(int(x))
+        else:
+            return f"{round(x, 2)}"
+
+    if left_inf and not right_inf:
+        return f"≤ {smart_fmt(nums[0])}"
+    elif right_inf and not left_inf:
+        return f"{smart_fmt(nums[0])}+"
+    elif not left_inf and not right_inf:
+        return f"{smart_fmt(nums[0])} - {smart_fmt(nums[1])}"
+    else:
+        return bin_str
+
+def clean_variable_data(df, var_name):
+    var_df = df[df['Var'] == var_name].copy()
+    var_df['Bin'] = var_df['Bin'].astype(str).str.strip().str.lower()
+    var_df['Bin'] = var_df['Bin'].replace({'special': 'Before 2020', 'missing': 'No Relationship'})
+    var_df = var_df[~((var_df['Bin'] == 'no relationship') & (var_df['Event rate'] == 0))]
+    var_df['Pretty Bin'] = var_df['Bin'].apply(lambda x: x if x in ['no relationship', 'before 2020'] else format_bin_label(x))
+    return var_df
+
+def extract_bin_lower_bound(bin_str):
+    """Helper to sort bins based on their lower bound."""
+    match = re.findall(r"[-+]?\d*\.\d+|\d+", bin_str)
+    if not match:
+        return float('-inf') if 'inf' in bin_str.lower() else 0
+    if '-inf' in bin_str.lower():
+        return float('-inf')
+    return float(match[0])
+
+# --- Main Plot Function ---
+
+def plot_feature_analysis_with_woe_bins(X, y, feature_name, woe_summary_df):
+    """
+    X: input DataFrame (must contain WOE-transformed feature)
+    y: target variable (Series)
+    feature_name: name of the WOE-transformed feature column in X
+    woe_summary_df: dataframe loaded from 'woe_summary.csv'
+    """
+
+    # Fit GEE model to get predicted probabilities
+    model = sm.GEE(y, X[[feature_name]], groups=X["MDM_ID"],
+                   cov_struct=sm.cov_struct.Independence(),
+                   family=sm.families.Binomial()).fit()
+    pred_prob = model.predict(X[[feature_name]])
+
+    # Prepare working DataFrame
+    df = pd.DataFrame({
+        'Feature': X[feature_name],
+        'Target': y,
+        'Pred_Prob': pred_prob
+    })
+
+    # Clean WOE bin info
+    bin_map_df = clean_variable_data(woe_summary_df, feature_name)[['Bin', 'Pretty Bin']]
+    bin_map = dict(zip(bin_map_df['Bin'], bin_map_df['Pretty Bin']))
+
+    # Round to 6 decimals for both data and dict
+    bin_assignments = woe_summary_df[woe_summary_df['Var'] == feature_name][['Bin', 'WoE']].drop_duplicates(subset='WoE')
+    bin_assignments['WoE'] = bin_assignments['WoE'].round(6)
+    bin_dict = dict(zip(bin_assignments['WoE'], bin_assignments['Bin']))
+
+    # Apply mapping
+    df['Bin'] = df['Feature'].round(6).map(bin_dict)
+    df['Pretty Bin'] = df['Bin'].map(bin_map)
+
+    # Drop rows with missing bin
+    df = df.dropna(subset=['Pretty Bin'])
+
+    # Group and aggregate
+    plot_df = df.groupby('Pretty Bin').agg(
+        Actual_Target_Rate=('Target', 'mean'),
+        Predicted_Prob=('Pred_Prob', 'mean')
+    ).reset_index()
+
+    # Sort bins by numeric order of lower bound
+    plot_df['SortKey'] = plot_df['Pretty Bin'].apply(extract_bin_lower_bound)
+    plot_df = plot_df.sort_values(by='SortKey').drop(columns='SortKey')
+
+    # Plot with dual y-axis
+    fig, ax1 = plt.subplots(figsize=(12, 6))
+
+    ax2 = ax1.twinx()
+    ax1.plot(plot_df['Pretty Bin'], plot_df['Actual_Target_Rate'], color='blue', marker='o', label='Actual Target Rate')
+    ax2.plot(plot_df['Pretty Bin'], plot_df['Predicted_Prob'], color='orange', marker='x', label='Predicted Probability')
+
+    ax1.set_xlabel("Bin")
+    ax1.set_ylabel("Actual Target Rate", color='blue')
+    ax2.set_ylabel("Predicted Probability", color='orange')
+
+    ax1.tick_params(axis='y', labelcolor='blue')
+    ax2.tick_params(axis='y', labelcolor='orange')
+    ax1.set_xticks(range(len(plot_df)))
+    ax1.set_xticklabels(plot_df['Pretty Bin'], rotation=45, ha='right')
+
+    plt.title(f"Target Rate vs. Bins for {feature_name}")
+    fig.tight_layout()
+    plt.grid(True)
+    plt.show()
+
+
+
+
 # Round WOE values in bin_dict keys to 6 decimals
 bin_assignments = woe_summary_df[woe_summary_df['Var'] == feature_name][['Bin', 'WoE']].drop_duplicates(subset='WoE')
 bin_assignments['WoE'] = bin_assignments['WoE'].round(6)  # match your data
