@@ -2,6 +2,63 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+def compare_variable_across_windows(deposit_df, variable, windows=None):
+    """
+    Generate KDE, boxplot, and segment-wise boxplot for a given variable across two time windows.
+
+    Parameters:
+    - deposit_df: DataFrame containing deposit data
+    - variable: str, the column name of the variable to analyze
+    - windows: dict with format {"label": (start_year, end_year)} — optional
+    """
+    if windows is None:
+        windows = {
+            "2018–2021": (2018, 2021),
+            "2022–2024": (2022, 2024)
+        }
+
+    df = deposit_df.copy()
+    df['prd_d'] = pd.to_datetime(df['prd_d'])
+    df['year'] = df['prd_d'].dt.year
+    df['window'] = None
+
+    for label, (start, end) in windows.items():
+        df.loc[(df['year'] >= start) & (df['year'] <= end), 'window'] = label
+
+    df = df[df['window'].notnull() & df[variable].notnull()].copy()
+
+    # KDE plot
+    plt.figure(figsize=(10, 6))
+    sns.kdeplot(data=df, x=variable, hue='window', common_norm=False)
+    plt.title(f"KDE Plot of {variable} Across Windows")
+    plt.xlabel(variable)
+    plt.tight_layout()
+    plt.show()
+
+    # Boxplot
+    plt.figure(figsize=(8, 5))
+    sns.boxplot(data=df, x='window', y=variable)
+    plt.title(f"Boxplot of {variable} by Window")
+    plt.ylabel(variable)
+    plt.tight_layout()
+    plt.show()
+
+    # Segment-wise boxplot (if commitment_segment exists)
+    if 'commitment_segment' in df.columns:
+        plt.figure(figsize=(12, 5))
+        sns.boxplot(data=df, x='commitment_segment', y=variable, hue='window')
+        plt.title(f"{variable} by Segment and Window")
+        plt.ylabel(variable)
+        plt.tight_layout()
+        plt.show()
+
+
+
+
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
 # Define windows
 windows = {
     "2018–2021": (2018, 2021),
