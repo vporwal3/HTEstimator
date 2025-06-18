@@ -1,3 +1,39 @@
+
+import pandas as pd
+
+# Ensure date column is datetime
+agg_df['prd_d'] = pd.to_datetime(agg_df['prd_d'])
+agg_df['year'] = agg_df['prd_d'].dt.year
+
+# Define windows
+windows = [
+    (2003, 2005),
+    (2006, 2009),
+    (2010, 2013),
+    (2014, 2017),
+    (2018, 2021),
+    (2022, 2024),
+]
+
+# Assign window label to each row
+def assign_window(year):
+    for start, end in windows:
+        if start <= year <= end:
+            return f"{start}-{end}"
+    return None
+
+agg_df['window'] = agg_df['year'].apply(assign_window)
+
+# Drop records that don’t fall into any window
+agg_df = agg_df[agg_df['window'].notnull()]
+
+# Count unique clients per window
+unique_clients = agg_df.groupby('window')['merged_src_ip_id'].nunique().reset_index()
+unique_clients.columns = ['window', 'num_unique_clients']
+
+print(unique_clients)
+
+
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
