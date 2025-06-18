@@ -1,3 +1,5 @@
+It’s possible that commitment segmentation is more related to credit exposure than to deposit behavior.
+
 
 import pandas as pd
 
