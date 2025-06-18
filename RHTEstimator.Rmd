@@ -1,4 +1,53 @@
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Define windows
+windows = {
+    "2018–2021": (2018, 2021),
+    "2022–2024": (2022, 2024)
+}
+
+# Add year column
+deposit_df['prd_d'] = pd.to_datetime(deposit_df['prd_d'])
+deposit_df['year'] = deposit_df['prd_d'].dt.year
+
+# Combine window labels
+deposit_df['window'] = None
+for label, (start, end) in windows.items():
+    deposit_df.loc[
+        (deposit_df['year'] >= start) & (deposit_df['year'] <= end), 'window'
+    ] = label
+
+# Filter to only rows in selected windows and with non-null deb_qty
+df_comp = deposit_df[
+    deposit_df['window'].notnull() & deposit_df['deb_qty'].notnull()
+].copy()
+
+# KDE comparison
+plt.figure(figsize=(10, 6))
+sns.kdeplot(data=df_comp, x='deb_qty', hue='window', common_norm=False)
+plt.title("KDE Plot of deb_qty Across Windows")
+plt.xlabel("deb_qty")
+plt.show()
+
+# Boxplot comparison
+plt.figure(figsize=(8, 5))
+sns.boxplot(data=df_comp, x='window', y='deb_qty')
+plt.title("Boxplot of deb_qty by Window")
+plt.ylabel("deb_qty")
+plt.show()
+
+# Optional: segment-wise boxplot in both windows
+if 'commitment_segment' in deposit_df.columns:
+    plt.figure(figsize=(12, 5))
+    sns.boxplot(data=df_comp, x='commitment_segment', y='deb_qty', hue='window')
+    plt.title("deb_qty by Segment and Window")
+    plt.ylabel("deb_qty")
+    plt.show()
+
+
+import pandas as pd
 
 # Step 1: Create two versions of df1 for the two match possibilities
 df1_a = df1.copy()
