@@ -1,5 +1,32 @@
 import pandas as pd
 
+# Step 1: Create two versions of df1 for the two match possibilities
+df1_a = df1.copy()
+df1_a['Matched_ID'] = df1_a['merged_src_ip_id']
+df1_a['match_type'] = 'merged_src_ip_id'
+
+df1_b = df1.copy()
+df1_b['Matched_ID'] = df1_b['borrower_id']
+df1_b['match_type'] = 'borrower_id'
+
+# Step 2: Combine both versions
+df1_combined = pd.concat([df1_a, df1_b], ignore_index=True)
+
+# Step 3: Merge with df2 on both Matched_ID and prd_d
+merged = df1_combined.merge(df2, on=['Matched_ID', 'prd_d'], how='left', suffixes=('', '_df2'))
+
+# Step 4: Drop helper columns used for matching
+merged.drop(columns=['Matched_ID', 'match_type'], inplace=True)
+
+# Step 5: Drop duplicates (same row matched via both ids — keep first match)
+merged = merged.drop_duplicates(subset=['merged_src_ip_id', 'borrower_id', 'prd_d'])
+
+# Now this is your original df1 with columns from df2 where matches occurred
+final_df1 = merged
+
+
+import pandas as pd
+
 # Example: Add a key column to match on
 df1_a = df1.rename(columns={'merged_src_ip_id': 'Matched_ID'})
 df1_b = df1.rename(columns={'borrower_id': 'Matched_ID'})
