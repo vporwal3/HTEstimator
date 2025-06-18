@@ -1,3 +1,29 @@
+import pandas as pd
+
+# Example: Add a key column to match on
+df1_a = df1.rename(columns={'merged_src_ip_id': 'Matched_ID'})
+df1_b = df1.rename(columns={'borrower_id': 'Matched_ID'})
+
+# Keep only necessary columns for merge
+df1_a['merge_type'] = 'merged_src_ip_id'
+df1_b['merge_type'] = 'borrower_id'
+
+# Concatenate both
+df1_combined = pd.concat([df1_a, df1_b])
+
+# Merge with df2 on both Matched_ID and prd_d
+merged = df1_combined.merge(df2, on=['Matched_ID', 'prd_d'], how='left')
+
+# Remove duplicates and prioritize one match if needed
+merged = merged.drop_duplicates(subset=['merged_src_ip_id', 'borrower_id', 'prd_d'])
+
+# Drop helper columns and restore original columns
+merged.drop(columns=['Matched_ID', 'merge_type'], inplace=True)
+
+# Final df1 with matched columns from df2
+final_df1 = merged
+
+
 
 coverage_check['months_after_t0'].hist(bins=30)
 print(coverage_check['months_after_t0'].describe())
