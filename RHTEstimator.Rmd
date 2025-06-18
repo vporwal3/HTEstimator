@@ -1,3 +1,8 @@
+pca = PCA()
+X_pca = pca.fit_transform(X_scaled)
+loadings = pd.DataFrame(pca.components_.T, index=features, columns=[f'PC{i+1}' for i in range(X_scaled.shape[1])])
+print(loadings)
+
 It’s possible that commitment segmentation is more related to credit exposure than to deposit behavior.
 
 
