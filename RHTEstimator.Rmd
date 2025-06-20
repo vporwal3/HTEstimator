@@ -1,3 +1,9 @@
+
+Hi [Manager’s Name],
+I hope you’re doing well! I was wondering if we could set up a quick call sometime this week. I’d really appreciate the chance to better understand your expectations for my involvement in the modeling project, and to get aligned on next steps or any upcoming plans where I can contribute.
+
+Happy to keep it very brief — just let me know what works best for your schedule. Thanks so much
+
 pca = PCA()
 X_pca = pca.fit_transform(X_scaled)
 loadings = pd.DataFrame(pca.components_.T, index=features, columns=[f'PC{i+1}' for i in range(X_scaled.shape[1])])
