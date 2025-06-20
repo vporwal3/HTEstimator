@@ -1,4 +1,56 @@
+WITH base AS (
+  SELECT
+    PARSE_DATE('%Y-%m-%d', PRD_D) AS PRD_DATE,
+    APPROACH,
+    SEGMENT,
+    SEGMENT_QRM,
+    BALANCE_TO_CALC_RATE,
+    int_paid
+  FROM `taw-riskmodeling-prod-5207.AW_RISK_MODELING.DEPOSIT_BETA_DATA_LIVE`
+),
+
+vintages AS (
+  SELECT
+    SEGMENT,
+    MIN(PARSE_DATE('%Y-%m-%d', PRD_D)) AS VINTAGE_DATE
+  FROM `taw-riskmodeling-prod-5207.AW_RISK_MODELING.DEPOSIT_BETA_DATA_LIVE`
+  GROUP BY SEGMENT
+),
+
+joined AS (
+  SELECT
+    b.PRD_DATE,
+    b.APPROACH,
+    b.SEGMENT,
+    b.SEGMENT_QRM,
+    v.VINTAGE_DATE,
+    FORMAT_DATE('%Y-%m', v.VINTAGE_DATE) AS VINTAGE,
+    (EXTRACT(YEAR FROM b.PRD_DATE) - EXTRACT(YEAR FROM v.VINTAGE_DATE)) * 12 +
+    (EXTRACT(MONTH FROM b.PRD_DATE) - EXTRACT(MONTH FROM v.VINTAGE_DATE)) AS MOB,
+    b.BALANCE_TO_CALC_RATE,
+    b.int_paid
+  FROM base b
+  LEFT JOIN vintages v
+    ON b.SEGMENT = v.SEGMENT
+)
+
+SELECT
+  FORMAT_DATE('%Y-%m-%d', PRD_DATE) AS PRD_D,
+  APPROACH,
+  SEGMENT,
+  SEGMENT_QRM,
+  VINTAGE,
+  MOB,
+  SUM(BALANCE_TO_CALC_RATE) AS BALANCE,
+  SUM(int_paid) AS INT_EXP,
+  SAFE_DIVIDE(SUM(int_paid), SUM(BALANCE_TO_CALC_RATE)) AS IN_RATE
+FROM joined
+GROUP BY PRD_D, APPROACH, SEGMENT, SEGMENT_QRM, VINTAGE, MOB
+ORDER BY PRD_D, APPROACH, SEGMENT, SEGMENT_QRM;
+
+
 DATE_DIFF(DATE(PRD_D), DATE(ORGNL_PSTG_D), MONTH) AS MOB
+
 Hi [Manager’s Name],
 I hope you’re doing well! I was wondering if we could set up a quick call sometime this week. I’d really appreciate the chance to better understand your expectations for my involvement in the modeling project, and to get aligned on next steps or any upcoming plans where I can contribute.
 
@@ -31,6 +83,8 @@ windows = [
 # Assign window label to each row
 def assign_window(year):
     for start, end in windows:
+
+
         if start <= year <= end:
             return f"{start}-{end}"
     return None
