@@ -1,27 +1,17 @@
-from jupyter_dash import JupyterDash
-from dash import html
-
-app = JupyterDash(__name__)
-app.layout = html.Div("✅ Hello from JupyterDash!")
-
-app.run_server(mode="external", port=8050)
 
 from dash import Dash, html
 
-app = Dash(__name__)
+app = Dash(
+    __name__,
+    requests_pathname_prefix='/proxy/8050/'  # ✅ This is crucial behind Jupyter proxy
+)
+
 app.layout = html.Div([
-    html.H1("✅ Hello from Dash"),
-    html.P("This is running on port 5173")
+    html.H1("✅ Hello from Dash!"),
+    html.P("Running behind Jupyter proxy")
 ])
 
-app.run(host="0.0.0.0", port=5173)
-
-from dash import Dash, html
-
-app = Dash(__name__)
-app.layout = html.H1("Hello Dash")
-
-app.run(host="0.0.0.0", port=5173)
+app.run(host="0.0.0.0", port=8050, debug=True, use_reloader=False)
 
 
 python3 -m venv venv
