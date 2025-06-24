@@ -1,3 +1,207 @@
+# ============================
+# config/settings.py
+# ============================
+
+PROJECT_ID = 'your-gcp-project-id'
+DATASET = 'your_dataset_name'
+TABLE = 'your_table_name'
+TIME_COL = 'report_date'  # or whatever your time column is
+
+# ============================
+# data/loader.py
+# ============================
+
+from google.cloud import bigquery
+import pandas as pd
+from config.settings import PROJECT_ID, DATASET, TABLE
+
+def load_data():
+    client = bigquery.Client(project=PROJECT_ID)
+    query = f"SELECT * FROM `{PROJECT_ID}.{DATASET}.{TABLE}`"
+    df = client.query(query).to_dataframe()
+    df['report_date'] = pd.to_datetime(df['report_date'])  # adjust as needed
+    return df
+
+# ============================
+# eda/base_analyzer.py
+# ============================
+
+from abc import ABC, abstractmethod
+
+class BaseAnalyzer(ABC):
+    def __init__(self, df, variable, time_col="report_date"):
+        self.df = df
+        self.variable = variable
+        self.time_col = time_col
+
+    @abstractmethod
+    def run(self):
+        pass
+
+# ============================
+# eda/missing_analyzer.py
+# ============================
+
+import pandas as pd
+from .base_analyzer import BaseAnalyzer
+
+class MissingValueAnalyzer(BaseAnalyzer):
+    def run(self):
+        total = self.df[self.variable].isna().mean() * 100
+        current_time = self.df[self.time_col].max()
+        current_df = self.df[self.df[self.time_col] == current_time]
+        current = current_df[self.variable].isna().mean() * 100
+
+        over_time = (
+            self.df.set_index(self.time_col)[self.variable]
+            .isna()
+            .groupby(pd.Grouper(freq='M'))
+            .mean()
+            .mul(100)
+            .reset_index(name="missing_pct")
+        )
+
+        return {
+            "total_summary": {"Missing %": round(total, 2)},
+            "current_summary": {"Missing %": round(current, 2)},
+            "time_series": over_time.rename(columns={"report_date": "date", "missing_pct": "value"})
+        }
+
+# ============================
+# eda/numeric_analyzer.py
+# ============================
+
+import pandas as pd
+from .base_analyzer import BaseAnalyzer
+
+class NumericAnalyzer(BaseAnalyzer):
+    def run(self):
+        series = self.df[self.variable]
+
+        total_summary = {
+            "Mean": round(series.mean(), 2),
+            "Median": round(series.median(), 2),
+            "Std Dev": round(series.std(), 2),
+            "Min": round(series.min(), 2),
+            "Max": round(series.max(), 2),
+        }
+
+        current_time = self.df[self.time_col].max()
+        current_series = self.df[self.df[self.time_col] == current_time][self.variable]
+
+        current_summary = {
+            "Mean": round(current_series.mean(), 2),
+            "Median": round(current_series.median(), 2),
+            "Std Dev": round(current_series.std(), 2),
+            "Min": round(current_series.min(), 2),
+            "Max": round(current_series.max(), 2),
+        }
+
+        grouped = self.df.set_index(self.time_col).groupby(pd.Grouper(freq='M'))[self.variable]
+        over_time = pd.DataFrame({
+            "Mean": grouped.mean(),
+            "Std Dev": grouped.std(),
+            "Min": grouped.min(),
+            "Max": grouped.max(),
+            "Median": grouped.median(),
+        }).reset_index().melt(id_vars=[self.time_col], var_name="Metric", value_name="value")
+
+        return {
+            "total_summary": total_summary,
+            "current_summary": current_summary,
+            "time_series": over_time.rename(columns={self.time_col: "date"})
+        }
+
+# ============================
+# plots/plot_factory.py
+# ============================
+
+import plotly.express as px
+import dash_table
+
+def line_plot(df, metric=None):
+    if "Metric" in df.columns and metric:
+        df = df[df["Metric"] == metric]
+    fig = px.line(df, x="date", y="value", color="Metric" if "Metric" in df.columns else None,
+                  title=f"{metric or 'Metric'} Over Time")
+    return fig
+
+def summary_table(summary_dict, title):
+    rows = [{"Metric": k, "Value": v} for k, v in summary_dict.items()]
+    return dash_table.DataTable(
+        columns=[{"name": i, "id": i} for i in ["Metric", "Value"]],
+        data=rows,
+        style_table={"overflowX": "auto"},
+        style_cell={"textAlign": "left"},
+    )
+
+# ============================
+# ui/layout.py
+# ============================
+
+from dash import html, dcc
+
+def build_layout(variable_options):
+    return html.Div([
+        html.H2("CECL EDA Dashboard"),
+        dcc.Dropdown(id='variable-dropdown', options=variable_options, placeholder="Select variable"),
+        html.Div(id='summary-total'),
+        html.Div(id='summary-current'),
+        dcc.Graph(id='plot-output')
+    ])
+
+# ============================
+# ui/callbacks.py
+# ============================
+
+from dash import Output, Input
+from eda.missing_analyzer import MissingValueAnalyzer
+from eda.numeric_analyzer import NumericAnalyzer
+from plots.plot_factory import line_plot, summary_table
+
+def register_callbacks(app, df, numeric_vars):
+    @app.callback(
+        Output("summary-total", "children"),
+        Output("summary-current", "children"),
+        Output("plot-output", "figure"),
+        Input("variable-dropdown", "value"),
+    )
+    def update_dashboard(variable):
+        if variable is None:
+            return "", "", {}
+
+        analyzer = (
+            MissingValueAnalyzer(df, variable) if df[variable].isna().sum() > 0
+            else NumericAnalyzer(df, variable)
+        )
+        results = analyzer.run()
+
+        total_table = summary_table(results["total_summary"], "Total Summary")
+        current_table = summary_table(results["current_summary"], "Current Summary")
+        plot = line_plot(results["time_series"])
+
+        return total_table, current_table, plot
+
+# ============================
+# app.py
+# ============================
+
+from dash import Dash
+from data.loader import load_data
+from ui.layout import build_layout
+from ui.callbacks import register_callbacks
+
+df = load_data()
+numeric_vars = df.select_dtypes(include="number").columns.tolist()
+
+app = Dash(__name__)
+app.layout = build_layout([{"label": v, "value": v} for v in numeric_vars])
+register_callbacks(app, df, numeric_vars)
+
+if __name__ == "__main__":
+    app.run_server(host="0.0.0.0", port=5173, debug=True)
+
+
 cecl_eda_dashboard/
 ├── app.py
 ├── data/
