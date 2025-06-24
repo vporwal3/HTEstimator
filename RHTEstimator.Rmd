@@ -1,3 +1,11 @@
+from jupyter_dash import JupyterDash
+from dash import html
+
+app = JupyterDash(__name__)
+app.layout = html.Div("✅ Hello from JupyterDash!")
+
+app.run_server(mode="external", port=8050)
+
 from dash import Dash, html
 
 app = Dash(__name__)
