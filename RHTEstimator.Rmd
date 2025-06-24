@@ -1,6 +1,16 @@
 from dash import Dash, html
 
 app = Dash(__name__)
+app.layout = html.Div([
+    html.H1("✅ Hello from Dash"),
+    html.P("This is running on port 5173")
+])
+
+app.run(host="0.0.0.0", port=5173)
+
+from dash import Dash, html
+
+app = Dash(__name__)
 app.layout = html.H1("Hello Dash")
 
 app.run(host="0.0.0.0", port=5173)
