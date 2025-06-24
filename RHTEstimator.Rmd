@@ -1,3 +1,187 @@
+l# ============================
+# File: app.py
+# ============================
+
+from dash import Dash
+from dash_bootstrap_components.themes import BOOTSTRAP
+from layout import register_pages, create_layout
+
+app = Dash(
+    __name__,
+    use_pages=True,
+    external_stylesheets=[BOOTSTRAP],
+    requests_pathname_prefix='/proxy/5173/'
+)
+
+register_pages()
+app.layout = create_layout()
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5173, debug=True, use_reloader=False)
+
+# ============================
+# File: layout.py
+# ============================
+
+import dash_bootstrap_components as dbc
+from dash import html, dcc, page_container
+
+def register_pages():
+    import pages.univariate_analysis  # Registering the page
+
+def create_layout():
+    sidebar = dbc.Nav(
+        [
+            dbc.NavLink("Home", href="/proxy/5173/", active="exact"),
+            dbc.NavLink("Univariate Analysis", href="/proxy/5173/univariate", active="exact"),
+        ],
+        vertical=True,
+        pills=True,
+        className="bg-dark text-white p-3"
+    )
+
+    return dbc.Container([
+        dbc.Row([
+            dbc.Col(sidebar, width=2),
+            dbc.Col(page_container, width=10)
+        ])
+    ], fluid=True)
+
+# ============================
+# File: pages/univariate_analysis.py
+# ============================
+
+from dash import html, dcc, register_page, Input, Output, callback
+import dash_bootstrap_components as dbc
+from plots.plot_factory import line_plot, summary_table
+from eda.analyzers import CombinedAnalyzer
+
+register_page(__name__, path="/univariate")
+
+VARIABLES = ["outstandings_amt", "commitments_amt", "int_rate_apr"]
+
+layout = dbc.Container([
+    html.H2("Univariate Analysis"),
+    dcc.Dropdown(VARIABLES, id="univariate-variable", value=VARIABLES[0]),
+    html.Br(),
+    html.Div(id="univariate-summary"),
+    dcc.Graph(id="univariate-plot", style={"height": "400px"}),
+], fluid=True)
+
+@callback(
+    Output("univariate-summary", "children"),
+    Output("univariate-plot", "figure"),
+    Input("univariate-variable", "value")
+)
+def update_page(variable):
+    analyzer = CombinedAnalyzer(variable)
+    summary_df = analyzer.total_summary()
+    current_df = analyzer.current_summary()
+    table = summary_table(summary_df, current_df, title=variable)
+
+    df_plot = analyzer.time_series()
+    fig = line_plot(df_plot, title=f"{variable} – Over Time")
+
+    return table, fig
+
+# ============================
+# File: eda/analyzers.py
+# ============================
+
+import pandas as pd
+from data.loader import load_data
+from abc import ABC, abstractmethod
+
+class BaseAnalyzer(ABC):
+    def __init__(self, variable):
+        self.variable = variable
+        self.df = load_data()
+        self.df = self.df[self.df[variable].notna()]
+        self.df["date"] = pd.to_datetime(self.df["date"])
+
+    @abstractmethod
+    def total_summary(self):
+        pass
+
+    @abstractmethod
+    def current_summary(self):
+        pass
+
+    @abstractmethod
+    def time_series(self):
+        pass
+
+class CombinedAnalyzer(BaseAnalyzer):
+    def total_summary(self):
+        df = self.df
+        return pd.DataFrame({
+            "Metric": ["Mean", "Median", "Std Dev", "Min", "Max"],
+            "Value": [
+                df[self.variable].mean(),
+                df[self.variable].median(),
+                df[self.variable].std(),
+                df[self.variable].min(),
+                df[self.variable].max(),
+            ]
+        })
+
+    def current_summary(self):
+        latest = self.df["date"].max()
+        df = self.df[self.df["date"] == latest]
+        return pd.DataFrame({
+            "Metric": ["Mean", "Median", "Std Dev", "Min", "Max"],
+            "Value": [
+                df[self.variable].mean(),
+                df[self.variable].median(),
+                df[self.variable].std(),
+                df[self.variable].min(),
+                df[self.variable].max(),
+            ]
+        })
+
+    def time_series(self):
+        df = self.df.set_index("date").resample("Q")[self.variable].agg(["mean", "median", "std", "min", "max"])
+        df = df.reset_index().melt(id_vars=["date"], var_name="Metric", value_name="Value")
+        return df
+
+# ============================
+# File: data/loader.py
+# ============================
+
+from google.cloud import bigquery
+import pandas as pd
+
+def load_data():
+    client = bigquery.Client()
+    query = """
+        SELECT date, outstandings_amt, commitments_amt, int_rate_apr
+        FROM `your_project.your_dataset.your_table`
+        WHERE date IS NOT NULL
+    """
+    return client.query(query).to_dataframe()
+
+# ============================
+# File: plots/plot_factory.py
+# ============================
+
+import plotly.express as px
+from dash import dash_table, html
+
+def line_plot(df, title="Time Series"):
+    return px.line(df, x="date", y="Value", color="Metric", title=title)
+
+def summary_table(total_df, current_df, title=""):
+    return html.Div([
+        html.H5(f"Total Summary – {title}"),
+        dash_table.DataTable(total_df.to_dict("records"), [{"name": i, "id": i} for i in total_df.columns]),
+        html.Br(),
+        html.H5("Current Summary"),
+        dash_table.DataTable(current_df.to_dict("records"), [{"name": i, "id": i} for i in current_df.columns]),
+    ])
+
+
+
+
 
 from dash import Dash, html
 
