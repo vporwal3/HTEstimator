@@ -1,3 +1,22 @@
+cecl_eda_dashboard/
+├── app.py
+├── data/
+│   └── loader.py
+├── eda/
+│   ├── base_analyzer.py
+│   ├── missing_analyzer.py
+│   └── numeric_analyzer.py
+├── plots/
+│   └── plot_factory.py
+├── ui/
+│   ├── layout.py
+│   └── callbacks.py
+└── config/
+    └── settings.py
+
+
+
+
 WITH vintages AS (
   SELECT
     SEGMENT,
