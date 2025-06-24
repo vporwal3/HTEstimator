@@ -1,3 +1,87 @@
+import pandas as pd
+from abc import ABC, abstractmethod
+
+# -----------------------------
+# Base Class
+# -----------------------------
+class BaseAnalyzer(ABC):
+    def __init__(self, df, variable, time_col="report_date"):
+        self.df = df
+        self.variable = variable
+        self.time_col = time_col
+
+    @abstractmethod
+    def run(self):
+        pass
+
+# -----------------------------
+# Missing % Analyzer
+# -----------------------------
+class MissingValueAnalyzer(BaseAnalyzer):
+    def run(self):
+        total = self.df[self.variable].isna().mean() * 100
+        current_time = self.df[self.time_col].max()
+        current_df = self.df[self.df[self.time_col] == current_time]
+        current = current_df[self.variable].isna().mean() * 100
+
+        over_time = (
+            self.df.set_index(self.time_col)[self.variable]
+            .isna()
+            .groupby(pd.Grouper(freq='M'))
+            .mean()
+            .mul(100)
+            .reset_index(name="missing_pct")
+        )
+
+        return {
+            "total_summary": {"Missing %": round(total, 2)},
+            "current_summary": {"Missing %": round(current, 2)},
+            "time_series": over_time.rename(columns={self.time_col: "date", "missing_pct": "value"})
+        }
+
+# -----------------------------
+# Numeric Summary Analyzer
+# -----------------------------
+class NumericAnalyzer(BaseAnalyzer):
+    def run(self):
+        series = self.df[self.variable]
+
+        total_summary = {
+            "Mean": round(series.mean(), 2),
+            "Median": round(series.median(), 2),
+            "Std Dev": round(series.std(), 2),
+            "Min": round(series.min(), 2),
+            "Max": round(series.max(), 2),
+        }
+
+        current_time = self.df[self.time_col].max()
+        current_series = self.df[self.df[self.time_col] == current_time][self.variable]
+
+        current_summary = {
+            "Mean": round(current_series.mean(), 2),
+            "Median": round(current_series.median(), 2),
+            "Std Dev": round(current_series.std(), 2),
+            "Min": round(current_series.min(), 2),
+            "Max": round(current_series.max(), 2),
+        }
+
+        grouped = self.df.set_index(self.time_col).groupby(pd.Grouper(freq='M'))[self.variable]
+        over_time = pd.DataFrame({
+            "Mean": grouped.mean(),
+            "Std Dev": grouped.std(),
+            "Min": grouped.min(),
+            "Max": grouped.max(),
+            "Median": grouped.median(),
+        }).reset_index().melt(id_vars=[self.time_col], var_name="Metric", value_name="value")
+
+        return {
+            "total_summary": total_summary,
+            "current_summary": current_summary,
+            "time_series": over_time.rename(columns={self.time_col: "date"})
+        }
+
+
+
 # ============================
 # config/settings.py
 # ============================
