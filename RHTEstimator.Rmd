@@ -1,3 +1,56 @@
+
+# ============================================
+# ✅ CECL EDA Debug Notebook (copy-paste all)
+# ============================================
+
+# Step 1: Set working directory if needed
+import os
+os.chdir("/path/to/cecl_eda_dashboard")  # Change this to your repo path
+
+# Step 2: Import modules from your existing backend
+from data.loader import load_data
+from eda.analyzers import MissingValueAnalyzer, NumericAnalyzer
+
+# Step 3: Load BigQuery data
+df = load_data()
+print("Data shape:", df.shape)
+df.head()
+
+# Step 4: Pick a variable to debug
+VARIABLE = "your_variable_here"  # 👈 Replace with an actual numeric or missing-prone column name
+TIME_COL = "report_date"         # 👈 Replace if your time column is different
+
+# Step 5: Run analyzer logic (uses same logic as Dash UI)
+analyzer = (
+    MissingValueAnalyzer(df, VARIABLE, TIME_COL)
+    if df[VARIABLE].isna().sum() > 0
+    else NumericAnalyzer(df, VARIABLE, TIME_COL)
+)
+
+results = analyzer.run()
+
+# Step 6: View Total and Current summaries
+print("📊 Total Summary:")
+for k, v in results["total_summary"].items():
+    print(f"{k}: {v}")
+
+print("\n📋 Current Summary:")
+for k, v in results["current_summary"].items():
+    print(f"{k}: {v}")
+
+# Step 7: Plot time series result
+import plotly.express as px
+
+df_plot = results["time_series"]
+fig = px.line(
+    df_plot,
+    x="date",
+    y="value",
+    color="Metric" if "Metric" in df_plot.columns else None,
+    title=f"{VARIABLE} - Over Time"
+)
+fig.show()
+
 import pandas as pd
 from abc import ABC, abstractmethod
 
