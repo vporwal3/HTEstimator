@@ -1,4 +1,10 @@
 
+dash
+pandas
+plotly
+google-cloud-bigquery
+
+
 # ============================================
 # ✅ CECL EDA Debug Notebook (copy-paste all)
 # ============================================
