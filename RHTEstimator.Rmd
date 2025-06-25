@@ -1,3 +1,125 @@
+# ============================
+# plots/plot_factory.py
+# ============================
+
+import plotly.express as px
+import dash_table
+from dash import dcc, html
+
+def line_plot(df, metric=None):
+    if "Metric" in df.columns and metric:
+        df = df[df["Metric"] == metric]
+    fig = px.line(df, x="date", y="value", color="Metric" if "Metric" in df.columns else None,
+                  title=f"{metric or 'Metric'} Over Time")
+    return fig
+
+def summary_table(summary_dict, title):
+    rows = [{"Metric": k, "Value": v} for k, v in summary_dict.items()]
+    return dash_table.DataTable(
+        columns=[{"name": i, "id": i} for i in ["Metric", "Value"]],
+        data=rows,
+        style_table={"overflowX": "auto"},
+        style_cell={"textAlign": "left"},
+    )
+
+def histogram_plot(df, variable):
+    fig = px.histogram(df, x=variable, nbins=50, title=f"Histogram of {variable}")
+    return fig
+
+def box_plot(df, variable):
+    fig = px.box(df, y=variable, title=f"Box Plot of {variable}")
+    return fig
+
+
+# ============================
+# eda/analyzer.py
+# ============================
+
+import pandas as pd
+from abc import ABC, abstractmethod
+from config.settings import TIME_COL
+
+class BaseAnalyzer(ABC):
+    def __init__(self, df, variable, time_col=TIME_COL):
+        self.df = df
+        self.variable = variable
+        self.time_col = time_col
+
+    @abstractmethod
+    def run(self):
+        pass
+
+class MissingValueAnalyzer(BaseAnalyzer):
+    def run(self):
+        total = self.df[self.variable].isna().mean() * 100
+        current_time = self.df[self.time_col].max()
+        current_df = self.df[self.df[self.time_col] == current_time]
+        current = current_df[self.variable].isna().mean() * 100
+
+        over_time = (
+            self.df.set_index(self.time_col)[self.variable]
+            .isna()
+            .groupby(pd.Grouper(freq='M'))
+            .mean()
+            .mul(100)
+            .reset_index(name="missing_pct")
+        )
+
+        return {
+            "total_summary": {"Missing %": round(total, 2)},
+            "current_summary": {"Missing %": round(current, 2)},
+            "time_series": over_time.rename(columns={self.time_col: "date", "missing_pct": "value"})
+        }
+
+class NumericAnalyzer(BaseAnalyzer):
+    def run(self):
+        self.df[self.variable] = self.df[self.variable].astype(float)
+        series = self.df[self.variable]
+        current_time = self.df[self.time_col].max()
+        current_series = self.df[self.df[self.time_col] == current_time][self.variable]
+
+        total_summary = {
+            "Mean": round(series.mean(), 2),
+            "Median": round(series.median(), 2),
+            "25th %ile": round(series.quantile(0.25), 2),
+            "75th %ile": round(series.quantile(0.75), 2),
+            "Std Dev": round(series.std(), 2),
+            "Min": round(series.min(), 2),
+            "Max": round(series.max(), 2),
+        }
+
+        current_summary = {
+            "Mean": round(current_series.mean(), 2),
+            "Median": round(current_series.median(), 2),
+            "25th %ile": round(current_series.quantile(0.25), 2),
+            "75th %ile": round(current_series.quantile(0.75), 2),
+            "Std Dev": round(current_series.std(), 2),
+            "Min": round(current_series.min(), 2),
+            "Max": round(current_series.max(), 2),
+        }
+
+        grouped = self.df.set_index(self.time_col).groupby(pd.Grouper(freq='M'))[self.variable]
+        over_time = pd.DataFrame({
+            "Mean": grouped.mean(),
+            "Median": grouped.median(),
+            "25th %ile": grouped.quantile(0.25),
+            "75th %ile": grouped.quantile(0.75),
+            "Std Dev": grouped.std(),
+            "Min": grouped.min(),
+            "Max": grouped.max(),
+        }).reset_index().melt(id_vars=[self.time_col], var_name="Metric", value_name="value")
+
+        return {
+            "total_summary": total_summary,
+            "current_summary": current_summary,
+            "time_series": over_time.rename(columns={self.time_col: "date"})
+        }
+
+
+# ============================
+# ui/layout.py
+# ============================
+
 from dash import html, dcc
 import dash_bootstrap_components as dbc
 
@@ -18,41 +140,54 @@ def build_layout(variable_options):
         ], className="mb-4"),
 
         dbc.Row([
-            dbc.Col([
-                html.H5(id="missing-title-total"),
-                html.Div(id='summary-total')
-            ], width=6),
-            dbc.Col([
-                html.H5(id="missing-title-current"),
-                html.Div(id='summary-current')
-            ], width=6)
+            dbc.Col([html.H5(id="missing-title-total"), html.Div(id='summary-total')], width=6),
+            dbc.Col([html.H5(id="missing-title-current"), html.Div(id='summary-current')], width=6)
         ], className="mb-4"),
 
         dbc.Row([
-            dbc.Col([
-                html.H5(id="numeric-title-total"),
-                html.Div(id='summary-total-numeric')
-            ], width=6),
-            dbc.Col([
-                html.H5(id="numeric-title-current"),
-                html.Div(id='summary-current-numeric')
-            ], width=6)
+            dbc.Col([html.H5(id="numeric-title-total"), html.Div(id='summary-total-numeric')], width=6),
+            dbc.Col([html.H5(id="numeric-title-current"), html.Div(id='summary-current-numeric')], width=6)
         ], className="mb-4"),
 
         dbc.Row([
             dbc.Col([
                 html.Label("Select Metric(s) to Plot:"),
-                dcc.Dropdown(id="metric-dropdown", placeholder="Select metric(s)", multi=True),
+                dcc.Dropdown(id="metric-dropdown", multi=True),
                 dcc.Graph(id='plot-output')
             ])
+        ], className="mb-5"),
+
+        html.Hr(),
+
+        dbc.Row([
+            dbc.Col([
+                html.Label("Distribution Scope:"),
+                dcc.Dropdown(
+                    id='dist-scope-dropdown',
+                    options=[
+                        {"label": "Total Dataset", "value": "total"},
+                        {"label": "Current Snapshot", "value": "current"}
+                    ],
+                    value="total",
+                    clearable=False
+                )
+            ], width=4)
+        ], className="mb-3"),
+
+        dbc.Row([
+            dbc.Col([dcc.Graph(id='histogram-output')], width=6),
+            dbc.Col([dcc.Graph(id='boxplot-output')], width=6)
         ])
     ], fluid=True)
 
 
+# ============================
+# ui/callbacks.py
+# ============================
 
 from dash import Output, Input
 from eda.analyzer import MissingValueAnalyzer, NumericAnalyzer
-from plots.plot_factory import line_plot, summary_table
+from plots.plot_factory import line_plot, summary_table, histogram_plot, box_plot
 from config.settings import TIME_COL
 
 def register_callbacks(app, df, numeric_vars):
@@ -68,19 +203,21 @@ def register_callbacks(app, df, numeric_vars):
         Output("numeric-title-total", "children"),
         Output("numeric-title-current", "children"),
         Output("plot-output", "figure"),
+        Output("histogram-output", "figure"),
+        Output("boxplot-output", "figure"),
         Input("variable-dropdown", "value"),
-        Input("metric-dropdown", "value")
+        Input("metric-dropdown", "value"),
+        Input("dist-scope-dropdown", "value")
     )
-    def update_dashboard(variable, selected_metrics):
+    def update_dashboard(variable, selected_metrics, dist_scope):
         if variable is None:
-            return "", "", "", "", [], None, "", "", "", "", {}
+            return "", "", "", "", [], None, "", "", "", "", {}, {}, {}
 
         missing_results = MissingValueAnalyzer(df, variable, time_col=TIME_COL).run()
         numeric_results = NumericAnalyzer(df, variable, time_col=TIME_COL).run()
 
         snapshot_date = df[TIME_COL].max().strftime("%b %Y")
 
-        # Combine numeric + missing for plot
         combined_plot_df = numeric_results["time_series"]
         if "time_series" in missing_results:
             missing_df = missing_results["time_series"].copy()
@@ -95,6 +232,10 @@ def register_callbacks(app, df, numeric_vars):
 
         filtered_df = combined_plot_df[combined_plot_df["Metric"].isin(selected_metrics)]
 
+        plot_df = df.copy()
+        if dist_scope == "current":
+            plot_df = plot_df[plot_df[TIME_COL] == plot_df[TIME_COL].max()]
+
         return (
             summary_table(missing_results["total_summary"], "Missing % (Total)"),
             summary_table(missing_results["current_summary"], f"Missing % ({snapshot_date})"),
@@ -106,8 +247,11 @@ def register_callbacks(app, df, numeric_vars):
             f"Missing Value Analysis – {snapshot_date}",
             "Statistical Summary – Total",
             f"Statistical Summary – {snapshot_date}",
-            line_plot(filtered_df)
+            line_plot(filtered_df),
+            histogram_plot(plot_df, variable),
+            box_plot(plot_df, variable)
         )
+
 
 
 
