@@ -41,12 +41,13 @@ def build_layout(variable_options):
 
         dbc.Row([
             dbc.Col([
-                html.Label("Select Metric to Plot:"),
-                dcc.Dropdown(id="metric-dropdown", placeholder="Select metric to plot"),
+                html.Label("Select Metric(s) to Plot:"),
+                dcc.Dropdown(id="metric-dropdown", placeholder="Select metric(s) to plot", multi=True),
                 dcc.Graph(id='plot-output')
             ])
         ])
     ], fluid=True)
+
 
 from dash import Output, Input
 from eda.missing_analyzer import MissingValueAnalyzer
@@ -69,20 +70,24 @@ def register_callbacks(app, df, numeric_vars):
         Input("variable-dropdown", "value"),
         Input("metric-dropdown", "value")
     )
-    def update_dashboard(variable, selected_metric):
+    def update_dashboard(variable, selected_metrics):
         if variable is None:
             return "", "", "", "", [], None, "", "", "", "", {}
 
         missing_results = MissingValueAnalyzer(df, variable).run()
         numeric_results = NumericAnalyzer(df, variable).run()
 
-        # Current snapshot date
         snapshot_date = df["report_date"].max().strftime("%b %Y")
 
-        # Plot metrics
         available_metrics = numeric_results["time_series"]["Metric"].unique()
         metric_options = [{"label": m, "value": m} for m in available_metrics]
-        metric = selected_metric if selected_metric in available_metrics else available_metrics[0]
+
+        if not selected_metrics:
+            selected_metrics = list(available_metrics)
+
+        filtered_df = numeric_results["time_series"]
+        if selected_metrics:
+            filtered_df = filtered_df[filtered_df["Metric"].isin(selected_metrics)]
 
         return (
             summary_table(missing_results["total_summary"], "Missing % (Total)"),
@@ -90,17 +95,13 @@ def register_callbacks(app, df, numeric_vars):
             summary_table(numeric_results["total_summary"], "Stats (Total)"),
             summary_table(numeric_results["current_summary"], f"Stats ({snapshot_date})"),
             metric_options,
-            metric,
+            selected_metrics,
             "Missing Value Analysis – Total",
             f"Missing Value Analysis – {snapshot_date}",
             "Statistical Summary – Total",
             f"Statistical Summary – {snapshot_date}",
-            line_plot(numeric_results["time_series"], metric)
+            line_plot(filtered_df)
         )
-
-
-
-
 
 
 
