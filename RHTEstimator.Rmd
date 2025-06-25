@@ -1,3 +1,19 @@
+# in data/loader.py
+import os
+
+def load_data():
+    cache_path = "data/cecl_data.parquet"
+    if os.path.exists(cache_path):
+        return pd.read_parquet(cache_path)
+    
+    client = bigquery.Client(project=PROJECT_ID)
+    query = f"SELECT * FROM `{PROJECT_ID}.{DATASET}.{TABLE}`"
+    df = client.query(query).to_dataframe()
+    df[TIME_COL] = pd.to_datetime(df[TIME_COL])
+    df.to_parquet(cache_path)
+    return df
+
+
 # ============================
 # plots/plot_factory.py
 # ============================
