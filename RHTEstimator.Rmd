@@ -1,4 +1,5 @@
-# app.py
+
+#app.py
 import dash
 from dash import dcc, html
 import dash_bootstrap_components as dbc
@@ -12,8 +13,6 @@ app = dash.Dash(__name__,
                 title="CECL EDA Dashboard")
 
 # Global data load
-df = load_data()
-app.server.df = df  # Store globally for access in pages
 
 # Navbar for side navigation
 sidebar = html.Div(
@@ -41,6 +40,7 @@ app.layout = html.Div([sidebar, content])
 if __name__ == "__main__":
     app.run_server(host="0.0.0.0", port=8050, debug=True)
 
+But do i need to call that data_store from somewhere?
 
 # pages/home.py
 import dash
