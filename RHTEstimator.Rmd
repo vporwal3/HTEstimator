@@ -42,17 +42,18 @@ def build_layout(variable_options):
         dbc.Row([
             dbc.Col([
                 html.Label("Select Metric(s) to Plot:"),
-                dcc.Dropdown(id="metric-dropdown", placeholder="Select metric(s) to plot", multi=True),
+                dcc.Dropdown(id="metric-dropdown", placeholder="Select metric(s)", multi=True),
                 dcc.Graph(id='plot-output')
             ])
         ])
     ], fluid=True)
 
 
+
 from dash import Output, Input
-from eda.missing_analyzer import MissingValueAnalyzer
-from eda.numeric_analyzer import NumericAnalyzer
+from eda.analyzer import MissingValueAnalyzer, NumericAnalyzer
 from plots.plot_factory import line_plot, summary_table
+from config.settings import TIME_COL
 
 def register_callbacks(app, df, numeric_vars):
     @app.callback(
@@ -74,20 +75,25 @@ def register_callbacks(app, df, numeric_vars):
         if variable is None:
             return "", "", "", "", [], None, "", "", "", "", {}
 
-        missing_results = MissingValueAnalyzer(df, variable).run()
-        numeric_results = NumericAnalyzer(df, variable).run()
+        missing_results = MissingValueAnalyzer(df, variable, time_col=TIME_COL).run()
+        numeric_results = NumericAnalyzer(df, variable, time_col=TIME_COL).run()
 
-        snapshot_date = df["report_date"].max().strftime("%b %Y")
+        snapshot_date = df[TIME_COL].max().strftime("%b %Y")
 
-        available_metrics = numeric_results["time_series"]["Metric"].unique()
+        # Combine numeric + missing for plot
+        combined_plot_df = numeric_results["time_series"]
+        if "time_series" in missing_results:
+            missing_df = missing_results["time_series"].copy()
+            missing_df["Metric"] = "Missing %"
+            combined_plot_df = pd.concat([combined_plot_df, missing_df], ignore_index=True)
+
+        available_metrics = combined_plot_df["Metric"].unique()
         metric_options = [{"label": m, "value": m} for m in available_metrics]
 
         if not selected_metrics:
-            selected_metrics = list(available_metrics)
+            selected_metrics = ["Mean"] if "Mean" in available_metrics else list(available_metrics)
 
-        filtered_df = numeric_results["time_series"]
-        if selected_metrics:
-            filtered_df = filtered_df[filtered_df["Metric"].isin(selected_metrics)]
+        filtered_df = combined_plot_df[combined_plot_df["Metric"].isin(selected_metrics)]
 
         return (
             summary_table(missing_results["total_summary"], "Missing % (Total)"),
@@ -102,6 +108,8 @@ def register_callbacks(app, df, numeric_vars):
             f"Statistical Summary – {snapshot_date}",
             line_plot(filtered_df)
         )
+
+
 
 
 
