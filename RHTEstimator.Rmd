@@ -19,34 +19,34 @@ def build_layout(variable_options):
 
         dbc.Row([
             dbc.Col([
-                html.H5("Missing Value Analysis – Total"),
+                html.H5(id="missing-title-total"),
                 html.Div(id='summary-total')
             ], width=6),
             dbc.Col([
-                html.H5("Missing Value Analysis – Current"),
+                html.H5(id="missing-title-current"),
                 html.Div(id='summary-current')
             ], width=6)
         ], className="mb-4"),
 
         dbc.Row([
             dbc.Col([
-                html.H5("Statistical Summary – Total"),
+                html.H5(id="numeric-title-total"),
                 html.Div(id='summary-total-numeric')
             ], width=6),
             dbc.Col([
-                html.H5("Statistical Summary – Current"),
+                html.H5(id="numeric-title-current"),
                 html.Div(id='summary-current-numeric')
             ], width=6)
         ], className="mb-4"),
 
         dbc.Row([
             dbc.Col([
-                html.H5("Trends Over Time"),
+                html.Label("Select Metric to Plot:"),
+                dcc.Dropdown(id="metric-dropdown", placeholder="Select metric to plot"),
                 dcc.Graph(id='plot-output')
             ])
         ])
     ], fluid=True)
-
 
 from dash import Output, Input
 from eda.missing_analyzer import MissingValueAnalyzer
@@ -59,23 +59,50 @@ def register_callbacks(app, df, numeric_vars):
         Output("summary-current", "children"),
         Output("summary-total-numeric", "children"),
         Output("summary-current-numeric", "children"),
+        Output("metric-dropdown", "options"),
+        Output("metric-dropdown", "value"),
+        Output("missing-title-total", "children"),
+        Output("missing-title-current", "children"),
+        Output("numeric-title-total", "children"),
+        Output("numeric-title-current", "children"),
         Output("plot-output", "figure"),
         Input("variable-dropdown", "value"),
+        Input("metric-dropdown", "value")
     )
-    def update_dashboard(variable):
+    def update_dashboard(variable, selected_metric):
         if variable is None:
-            return "", "", "", "", {}
+            return "", "", "", "", [], None, "", "", "", "", {}
 
         missing_results = MissingValueAnalyzer(df, variable).run()
         numeric_results = NumericAnalyzer(df, variable).run()
 
+        # Current snapshot date
+        snapshot_date = df["report_date"].max().strftime("%b %Y")
+
+        # Plot metrics
+        available_metrics = numeric_results["time_series"]["Metric"].unique()
+        metric_options = [{"label": m, "value": m} for m in available_metrics]
+        metric = selected_metric if selected_metric in available_metrics else available_metrics[0]
+
         return (
             summary_table(missing_results["total_summary"], "Missing % (Total)"),
-            summary_table(missing_results["current_summary"], "Missing % (Current)"),
+            summary_table(missing_results["current_summary"], f"Missing % ({snapshot_date})"),
             summary_table(numeric_results["total_summary"], "Stats (Total)"),
-            summary_table(numeric_results["current_summary"], "Stats (Current)"),
-            line_plot(numeric_results["time_series"])
+            summary_table(numeric_results["current_summary"], f"Stats ({snapshot_date})"),
+            metric_options,
+            metric,
+            "Missing Value Analysis – Total",
+            f"Missing Value Analysis – {snapshot_date}",
+            "Statistical Summary – Total",
+            f"Statistical Summary – {snapshot_date}",
+            line_plot(numeric_results["time_series"], metric)
         )
+
+
+
+
+
+
 
 
 from dash import Dash
