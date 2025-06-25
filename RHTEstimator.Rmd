@@ -1,3 +1,111 @@
+from dash import html, dcc
+import dash_bootstrap_components as dbc
+
+def build_layout(variable_options):
+    return dbc.Container([
+        html.H2("CECL EDA Dashboard", className="my-4 text-center"),
+
+        dbc.Row([
+            dbc.Col([
+                html.Label("Select Variable:"),
+                dcc.Dropdown(
+                    id='variable-dropdown',
+                    options=variable_options,
+                    placeholder="Select a variable",
+                    value=variable_options[0]['value'] if variable_options else None
+                ),
+            ], width=6),
+        ], className="mb-4"),
+
+        dbc.Row([
+            dbc.Col([
+                html.H5("Missing Value Analysis – Total"),
+                html.Div(id='summary-total')
+            ], width=6),
+            dbc.Col([
+                html.H5("Missing Value Analysis – Current"),
+                html.Div(id='summary-current')
+            ], width=6)
+        ], className="mb-4"),
+
+        dbc.Row([
+            dbc.Col([
+                html.H5("Statistical Summary – Total"),
+                html.Div(id='summary-total-numeric')
+            ], width=6),
+            dbc.Col([
+                html.H5("Statistical Summary – Current"),
+                html.Div(id='summary-current-numeric')
+            ], width=6)
+        ], className="mb-4"),
+
+        dbc.Row([
+            dbc.Col([
+                html.H5("Trends Over Time"),
+                dcc.Graph(id='plot-output')
+            ])
+        ])
+    ], fluid=True)
+
+
+from dash import Output, Input
+from eda.missing_analyzer import MissingValueAnalyzer
+from eda.numeric_analyzer import NumericAnalyzer
+from plots.plot_factory import line_plot, summary_table
+
+def register_callbacks(app, df, numeric_vars):
+    @app.callback(
+        Output("summary-total", "children"),
+        Output("summary-current", "children"),
+        Output("summary-total-numeric", "children"),
+        Output("summary-current-numeric", "children"),
+        Output("plot-output", "figure"),
+        Input("variable-dropdown", "value"),
+    )
+    def update_dashboard(variable):
+        if variable is None:
+            return "", "", "", "", {}
+
+        missing_results = MissingValueAnalyzer(df, variable).run()
+        numeric_results = NumericAnalyzer(df, variable).run()
+
+        return (
+            summary_table(missing_results["total_summary"], "Missing % (Total)"),
+            summary_table(missing_results["current_summary"], "Missing % (Current)"),
+            summary_table(numeric_results["total_summary"], "Stats (Total)"),
+            summary_table(numeric_results["current_summary"], "Stats (Current)"),
+            line_plot(numeric_results["time_series"])
+        )
+
+
+from dash import Dash
+import dash_bootstrap_components as dbc
+from data.loader import load_data
+from ui.layout import build_layout
+from ui.callbacks import register_callbacks
+
+df = load_data()
+numeric_vars = df.select_dtypes(include="number").columns.tolist()
+
+app = Dash(
+    __name__,
+    external_stylesheets=[dbc.themes.BOOTSTRAP],
+    suppress_callback_exceptions=True,
+    title="CECL EDA Dashboard"
+)
+
+app.layout = build_layout([{"label": v, "value": v} for v in numeric_vars])
+register_callbacks(app, df, numeric_vars)
+
+if __name__ == "__main__":
+    app.run_server(host="0.0.0.0", port=5173, debug=True)
+
+
+
+
+
+
+
 
 #app.py
 import dash
