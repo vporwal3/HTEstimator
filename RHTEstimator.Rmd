@@ -1,50 +1,53 @@
 def histogram_plot_binned(series, title, max_bins=50):
     import numpy as np
     import pandas as pd
-    import plotly.express as px
+    import plotly.graph_objects as go
 
-    # dropna, keep zeros
     series = series.dropna()
-    series = series[series >= 0]
+    zero_count = (series == 0).sum()
+    positive_series = series[series > 0]
 
-    log_series = np.log1p(series)
+    # linear bins on positive data
+    lower = positive_series.quantile(0.01)
+    upper = positive_series.quantile(0.99)
+    bin_edges = np.linspace(lower, upper, max_bins + 1)
 
-    lower = log_series.quantile(0.01)
-    upper = log_series.quantile(0.99)
-    if lower == upper:
-        lower = log_series.min()
-        upper = log_series.max() + 1e-3
+    counts, _ = np.histogram(positive_series, bins=bin_edges)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
 
-    bin_edges_log = np.linspace(lower, upper, max_bins + 1)
-    counts, _ = np.histogram(log_series, bins=bin_edges_log)
+    bin_ranges = [
+        f"{round(left,2)}–{round(right,2)}"
+        for left, right in zip(bin_edges[:-1], bin_edges[1:])
+    ]
 
-    bin_centers_log = (bin_edges_log[:-1] + bin_edges_log[1:]) / 2
-    bin_centers_linear = np.expm1(bin_centers_log)
+    fig = go.Figure()
 
-    df_bins = pd.DataFrame({
-        "bin_center": bin_centers_linear,
-        "count": counts,
-        "bin_range": [
-            f"{round(np.expm1(left),2)}–{round(np.expm1(right),2)}"
-            for left, right in zip(bin_edges_log[:-1], bin_edges_log[1:])
-        ]
-    })
+    # zero bin
+    if zero_count > 0:
+        fig.add_bar(
+            x=[0],
+            y=[zero_count],
+            name="Zero",
+            hovertemplate="Value: 0<br>Count: %{y}"
+        )
 
-    fig = px.bar(
-        df_bins,
-        x="bin_center",
-        y="count",
-        hover_data=["bin_range"],
-        title=title,
-        labels={"bin_center": "Value", "count": "Count"}
+    # positive bins
+    fig.add_bar(
+        x=bin_centers,
+        y=counts,
+        name="Positive",
+        hovertemplate="Bin Range: %{customdata}<br>Count: %{y}",
+        customdata=bin_ranges
     )
 
-    # log x axis to handle skew
-    fig.update_xaxes(type="log")
-    fig.update_layout(margin=dict(l=10, r=10, t=40, b=10))
-
+    fig.update_xaxes(title="Value (Original Scale)", showgrid=True)
+    fig.update_yaxes(title="Count")
+    fig.update_layout(
+        title=title,
+        bargap=0.1,
+        margin=dict(l=10, r=10, t=40, b=10)
+    )
     return fig
-
 
 
 
