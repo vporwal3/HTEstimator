@@ -1,49 +1,51 @@
 def histogram_plot_binned(series, title, max_bins=50):
     import numpy as np
     import pandas as pd
-    import plotly.express as px
+    import plotly.graph_objects as go
 
+    # dropna, keep zeros
     series = series.dropna()
     series = series[series >= 0]
+
     log_series = np.log1p(series)
 
+    # bin in log scale
     lower = log_series.quantile(0.01)
     upper = log_series.quantile(0.99)
-
     if lower == upper:
         lower = log_series.min()
         upper = log_series.max() + 1e-3
 
-    bin_edges = np.linspace(lower, upper, max_bins + 1)
-    counts, _ = np.histogram(log_series, bins=bin_edges)
+    bin_edges_log = np.linspace(lower, upper, max_bins + 1)
+    counts, _ = np.histogram(log_series, bins=bin_edges_log)
 
-    bin_centers_log = (bin_edges[:-1] + bin_edges[1:]) / 2
+    # convert bin edges back to original scale
+    bin_edges_linear = np.expm1(bin_edges_log)
+
+    bin_widths = np.diff(bin_edges_linear)
+    bin_centers = bin_edges_linear[:-1] + bin_widths / 2
 
     df_bins = pd.DataFrame({
-        "bin_center_log": bin_centers_log,
+        "bin_center": bin_centers,
+        "bin_width": bin_widths,
         "count": counts,
-        "bin_range": [
-            f"{round(np.expm1(left),2)}–{round(np.expm1(right),2)}"
-            for left, right in zip(bin_edges[:-1], bin_edges[1:])
-        ]
+        "bin_range": [f"{round(left,2)}–{round(right,2)}" 
+            for left, right in zip(bin_edges_linear[:-1], bin_edges_linear[1:])]
     })
 
-    fig = px.bar(
-        df_bins,
-        x="bin_center_log",
-        y="count",
-        hover_data=["bin_range"],
-        title=title,
-        labels={"bin_center_log": "Value (log scale)", "count": "Count"}
+    fig = go.Figure()
+    fig.add_bar(
+        x=df_bins["bin_center"],
+        y=df_bins["count"],
+        width=df_bins["bin_width"],
+        hovertext=df_bins["bin_range"],
+        marker=dict(line=dict(width=0.5, color="black"))
     )
+    fig.update_xaxes(title="Value (original scale)")
+    fig.update_yaxes(title="Count")
+    fig.update_layout(title=title, bargap=0.05)
 
-    # set x axis to log
-    fig.update_xaxes(type="log", tickvals=bin_centers_log,
-        ticktext=[f"{round(np.expm1(c),2)}" for c in bin_centers_log]
-    )
-    fig.update_layout(margin=dict(l=10, r=10, t=40, b=10))
     return fig
-
 
 
 
