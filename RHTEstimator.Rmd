@@ -1,3 +1,6 @@
+Both formulas gave the same result because numpy’s broadcasting scales each observation consistently across rows, so multiplying d * X.T effectively applies the same row weights as D @ X, even though the notation looked different.
+
+
 # ============================
 # config/settings.py
 # ============================
