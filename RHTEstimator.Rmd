@@ -1,20 +1,15 @@
 box and voilion
 
 
-# overlay hoverable scatter to cover entire box
-box_x = [
-    summary_dict["q1"], summary_dict["q3"],
-    summary_dict["q3"], summary_dict["q1"],
-    summary_dict["q1"]
-]
-box_y = [-0.2, -0.2, 0.2, 0.2, -0.2]
+
+box_center_x = (summary_dict["q1"] + summary_dict["q3"]) / 2
+hover_marker_size = 50  # adjust as you like
 
 fig.add_trace(go.Scatter(
-    x=box_x,
-    y=box_y,
-    fill="toself",
-    fillcolor="rgba(0,0,0,0)",
-    line=dict(color="rgba(0,0,0,0)"),
+    x=[box_center_x],
+    y=[0],
+    mode="markers",
+    marker=dict(size=hover_marker_size, color="rgba(0,0,0,0)"),
     hovertemplate=hover_text,
     showlegend=False
 ))
