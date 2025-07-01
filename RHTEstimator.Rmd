@@ -1,468 +1,7 @@
-box and voilion
-
-
-
-box_center_x = (summary_dict["q1"] + summary_dict["q3"]) / 2
-hover_marker_size = 50  # adjust as you like
-
-fig.add_trace(go.Scatter(
-    x=[box_center_x],
-    y=[0],
-    mode="markers",
-    marker=dict(size=hover_marker_size, color="rgba(0,0,0,0)"),
-    hovertemplate=hover_text,
-    showlegend=False
-))
-
-# ============================
-# eda/analyzer.py
-# ============================
-import pandas as pd
-from abc import ABC, abstractmethod
-from config.settings import TIME_COL
-
-class BaseAnalyzer(ABC):
-    def __init__(self, df, variable, time_col=TIME_COL):
-        self.df = df
-        self.variable = variable
-        self.time_col = time_col
-
-    @abstractmethod
-    def run(self):
-        pass
-
-class NumericAnalyzer(BaseAnalyzer):
-    def run(self):
-        self.df[self.variable] = self.df[self.variable].astype(float)
-        series = self.df[self.variable]
-        current_time = self.df[self.time_col].max()
-        current_series = self.df[self.df[self.time_col] == current_time][self.variable]
-
-        total_summary = {
-            "Mean": round(series.mean(), 2),
-            "Median": round(series.median(), 2),
-            "25th %ile": round(series.quantile(0.25), 2),
-            "75th %ile": round(series.quantile(0.75), 2),
-            "Std Dev": round(series.std(), 2),
-            "Min": round(series.min(), 2),
-            "Max": round(series.max(), 2),
-        }
-
-        current_summary = {
-            "Mean": round(current_series.mean(), 2),
-            "Median": round(current_series.median(), 2),
-            "25th %ile": round(current_series.quantile(0.25), 2),
-            "75th %ile": round(current_series.quantile(0.75), 2),
-            "Std Dev": round(current_series.std(), 2),
-            "Min": round(current_series.min(), 2),
-            "Max": round(current_series.max(), 2),
-        }
-
-        grouped = self.df.set_index(self.time_col).groupby(pd.Grouper(freq="M"))[self.variable]
-        over_time = pd.DataFrame({
-            "Mean": grouped.mean(),
-            "Median": grouped.median(),
-            "25th %ile": grouped.quantile(0.25),
-            "75th %ile": grouped.quantile(0.75),
-            "Std Dev": grouped.std(),
-            "Min": grouped.min(),
-            "Max": grouped.max(),
-        }).reset_index().melt(id_vars=[self.time_col], var_name="Metric", value_name="value")
-
-        return {
-            "total_summary": total_summary,
-            "current_summary": current_summary,
-            "time_series": over_time.rename(columns={self.time_col: "date"})
-        }
-
-    def box_summary(self):
-        series = self.df[self.variable].astype(float).dropna()
-        q1 = series.quantile(0.25)
-        q3 = series.quantile(0.75)
-        median = series.median()
-        iqr = q3 - q1
-        whisker_low = max(series.min(), q1 - 1.5 * iqr)
-        whisker_high = min(series.max(), q3 + 1.5 * iqr)
-
-        return {
-            "q1": q1,
-            "q3": q3,
-            "median": median,
-            "whisker_low": whisker_low,
-            "whisker_high": whisker_high
-        }
-
-
-
-# ============================
-# plots/plot_factory.py
-# ============================
-import plotly.graph_objects as go
-
-def box_plot_summary(summary_dict, outlier_points, title):
-    """
-    Plots a horizontal box with enriched summary stats hover
-    plus scatter for outliers
-    """
-
-    fig = go.Figure()
-
-    # draw box rectangle
-    fig.add_shape(
-        type="rect",
-        y0=-0.2, y1=0.2,
-        x0=summary_dict["q1"],
-        x1=summary_dict["q3"],
-        fillcolor="lightblue",
-        opacity=0.5,
-        line=dict(color="blue")
-    )
-
-    # median
-    fig.add_shape(
-        type="line",
-        y0=-0.2, y1=0.2,
-        x0=summary_dict["median"],
-        x1=summary_dict["median"],
-        line=dict(color="black", width=2)
-    )
-
-    # whiskers
-    fig.add_shape(
-        type="line",
-        y0=0,
-        y1=0,
-        x0=summary_dict["whisker_low"],
-        x1=summary_dict["whisker_high"],
-        line=dict(color="blue", width=1)
-    )
-
-    # IQR
-    iqr = summary_dict["q3"] - summary_dict["q1"]
-
-    hover_text = (
-        f"<b>Summary Stats</b><br>"
-        f"Q1: {round(summary_dict['q1'],2)}<br>"
-        f"Median: {round(summary_dict['median'],2)}<br>"
-        f"Q3: {round(summary_dict['q3'],2)}<br>"
-        f"IQR: {round(iqr, 2)}<br>"
-        f"Whisker Low: {round(summary_dict['whisker_low'],2)}<br>"
-        f"Whisker High: {round(summary_dict['whisker_high'],2)}"
-    )
-
-    fig.add_trace(go.Scatter(
-        x=[summary_dict['median']],
-        y=[0],
-        mode="markers",
-        marker=dict(color="rgba(0,0,0,0)"),
-        hovertemplate=hover_text,
-        showlegend=False
-    ))
-
-    # outlier scatter
-    if outlier_points is not None and not outlier_points.empty:
-        fig.add_trace(go.Scatter(
-            y=[0]*len(outlier_points),
-            x=outlier_points,
-            mode="markers",
-            marker=dict(color="red", size=6),
-            name="Outliers"
-        ))
-
-    fig.update_yaxes(visible=False)
-    fig.update_xaxes(title="Value")
-    fig.update_layout(
-        title=title,
-        margin=dict(l=10, r=10, t=40, b=10)
-    )
-    return fig
-
-
-
-
-
-# ============================
-# ui/callbacks.py
-# ============================
-from dash import Output, Input
-from eda.analyzer import MissingValueAnalyzer, NumericAnalyzer
-from plots.plot_factory import (
-    line_plot,
-    summary_table,
-    histogram_plot_binned,
-    box_plot_summary
-)
-from config.settings import TIME_COL
-import pandas as pd
-
-def register_callbacks(app, df, numeric_vars):
-    @app.callback(
-        Output("summary-total", "children"),
-        Output("summary-current", "children"),
-        Output("summary-total-numeric", "children"),
-        Output("summary-current-numeric", "children"),
-        Output("metric-dropdown", "options"),
-        Output("metric-dropdown", "value"),
-        Output("missing-title-total", "children"),
-        Output("missing-title-current", "children"),
-        Output("numeric-title-total", "children"),
-        Output("numeric-title-current", "children"),
-        Output("plot-output", "figure"),
-        Output("histogram-overall", "figure"),
-        Output("histogram-current", "figure"),
-        Output("box-overall", "figure"),
-        Output("box-current", "figure"),
-        Input("variable-dropdown", "value"),
-        Input("metric-dropdown", "value")
-    )
-    def update_dashboard(variable, selected_metrics):
-        if variable is None:
-            return "", "", "", "", [], None, "", "", "", "", {}, {}, {}, {}, {}
-
-        # analyzers
-        missing_results = MissingValueAnalyzer(df, variable).run()
-        numeric_analyzer = NumericAnalyzer(df, variable)
-        numeric_results = numeric_analyzer.run()
-
-        snapshot_date = df[TIME_COL].max().strftime("%b %Y")
-
-        combined_df = numeric_results["time_series"]
-        if "time_series" in missing_results:
-            missing_df = missing_results["time_series"].copy()
-            missing_df["Metric"] = "Missing %"
-            combined_df = pd.concat([combined_df, missing_df], ignore_index=True)
-
-        available_metrics = combined_df["Metric"].unique()
-        metric_options = [{"label": m, "value": m} for m in available_metrics]
-
-        if not selected_metrics:
-            selected_metrics = ["Mean"] if "Mean" in available_metrics else list(available_metrics)
-
-        filtered_df = combined_df[combined_df["Metric"].isin(selected_metrics)]
-
-        # current snapshot
-        current_time = df[TIME_COL].max()
-        df_current = df[df[TIME_COL] == current_time]
-
-        # line plot
-        line = line_plot(filtered_df)
-
-        # histograms
-        hist_overall = histogram_plot_binned(df[variable], title="Overall Distribution")
-        hist_current = histogram_plot_binned(df_current[variable], title=f"Distribution at {snapshot_date}")
-
-        # box plot
-        box_stats_overall = numeric_analyzer.box_summary()
-        outlier_points_overall = pd.concat([
-            df[variable].nsmallest(200),
-            df[variable].nlargest(200)
-        ])
-        box_overall = box_plot_summary(box_stats_overall, outlier_points_overall, title="Box Plot – Overall Data")
-
-        # box plot current
-        numeric_analyzer_current = NumericAnalyzer(df_current, variable)
-        box_stats_current = numeric_analyzer_current.box_summary()
-        outlier_points_current = pd.concat([
-            df_current[variable].nsmallest(200),
-            df_current[variable].nlargest(200)
-        ])
-        box_current = box_plot_summary(box_stats_current, outlier_points_current, title=f"Box Plot – Snapshot {snapshot_date}")
-
-        return (
-            summary_table(missing_results["total_summary"], "Missing % (Total)"),
-            summary_table(missing_results["current_summary"], f"Missing % ({snapshot_date})"),
-            summary_table(numeric_results["total_summary"], "Stats (Total)"),
-            summary_table(numeric_results["current_summary"], f"Stats ({snapshot_date})"),
-            metric_options,
-            selected_metrics,
-            "Missing Value Analysis – Total",
-            f"Missing Value Analysis – {snapshot_date}",
-            "Statistical Summary – Total",
-            f"Statistical Summary – {snapshot_date}",
-            line,
-            hist_overall,
-            hist_current,
-            box_overall,
-            box_current
-        )
-
-
-
-
-
-
-
-from dash import html, dcc
-import dash_bootstrap_components as dbc
-
-def build_layout(variable_options):
-    return dbc.Container([
-
-        html.H2("CECL EDA Dashboard", className="my-4 text-center"),
-
-        # variable selector
-        dbc.Row([
-            dbc.Col([
-                html.Label("Select Variable:"),
-                dcc.Dropdown(
-                    id="variable-dropdown",
-                    options=variable_options,
-                    placeholder="Select a variable",
-                    value=variable_options[0]["value"] if variable_options else None
-                ),
-            ], width=6),
-        ], className="mb-4"),
-
-        # summaries
-        dbc.Row([
-            dbc.Col([html.H5(id="missing-title-total"), html.Div(id="summary-total")], width=6),
-            dbc.Col([html.H5(id="missing-title-current"), html.Div(id="summary-current")], width=6)
-        ], className="mb-4"),
-
-        dbc.Row([
-            dbc.Col([html.H5(id="numeric-title-total"), html.Div(id="summary-total-numeric")], width=6),
-            dbc.Col([html.H5(id="numeric-title-current"), html.Div(id="summary-current-numeric")], width=6)
-        ], className="mb-4"),
-
-        # metric over time
-        dbc.Row([
-            dbc.Col([
-                html.Label("Select Metric(s) to Plot:"),
-                dcc.Dropdown(id="metric-dropdown", multi=True),
-                dcc.Graph(id="plot-output")
-            ])
-        ], className="mb-5"),
-
-        html.Hr(),
-
-        # histograms
-        dbc.Row([
-            dbc.Col([dcc.Graph(id="histogram-overall")], width=6),
-            dbc.Col([dcc.Graph(id="histogram-current")], width=6)
-        ], className="mb-5"),
-
-        html.Hr(),
-
-        # box plots
-        dbc.Row([
-            dbc.Col([dcc.Graph(id="box-overall")], width=6),
-            dbc.Col([dcc.Graph(id="box-current")], width=6)
-        ], className="mb-5"),
-
-        html.Hr(),
-
-        # violin plots
-        dbc.Row([
-            dbc.Col([dcc.Graph(id="violin-overall")], width=6),
-            dbc.Col([dcc.Graph(id="violin-current")], width=6)
-        ], className="mb-5"),
-
-    ], fluid=True)
-
-
-from dash import Output, Input
-from eda.analyzer import MissingValueAnalyzer, NumericAnalyzer
-from plots.plot_factory import (
-    line_plot,
-    summary_table,
-    histogram_plot_binned,
-    box_plot_with_extremes,
-    violin_plot_kde
-)
-from config.settings import TIME_COL
-import pandas as pd
-
-def register_callbacks(app, df, numeric_vars):
-    @app.callback(
-        Output("summary-total", "children"),
-        Output("summary-current", "children"),
-        Output("summary-total-numeric", "children"),
-        Output("summary-current-numeric", "children"),
-        Output("metric-dropdown", "options"),
-        Output("metric-dropdown", "value"),
-        Output("missing-title-total", "children"),
-        Output("missing-title-current", "children"),
-        Output("numeric-title-total", "children"),
-        Output("numeric-title-current", "children"),
-        Output("plot-output", "figure"),
-        Output("histogram-overall", "figure"),
-        Output("histogram-current", "figure"),
-        Output("box-overall", "figure"),
-        Output("box-current", "figure"),
-        Output("violin-overall", "figure"),
-        Output("violin-current", "figure"),
-        Input("variable-dropdown", "value"),
-        Input("metric-dropdown", "value")
-    )
-    def update_dashboard(variable, selected_metrics):
-        if variable is None:
-            return "", "", "", "", [], None, "", "", "", "", {}, {}, {}, {}, {}, {}, {}
-
-        # analyzers
-        missing_results = MissingValueAnalyzer(df, variable).run()
-        numeric_results = NumericAnalyzer(df, variable).run()
-
-        snapshot_date = df[TIME_COL].max().strftime("%b %Y")
-
-        combined_df = numeric_results["time_series"]
-        if "time_series" in missing_results:
-            missing_df = missing_results["time_series"].copy()
-            missing_df["Metric"] = "Missing %"
-            combined_df = pd.concat([combined_df, missing_df], ignore_index=True)
-
-        available_metrics = combined_df["Metric"].unique()
-        metric_options = [{"label": m, "value": m} for m in available_metrics]
-
-        if not selected_metrics:
-            selected_metrics = ["Mean"] if "Mean" in available_metrics else list(available_metrics)
-
-        filtered_df = combined_df[combined_df["Metric"].isin(selected_metrics)]
-
-        # current snapshot
-        current_time = df[TIME_COL].max()
-        df_current = df[df[TIME_COL] == current_time]
-
-        # plots
-        line = line_plot(filtered_df)
-        hist_overall = histogram_plot_binned(df[variable], title="Overall Distribution")
-        hist_current = histogram_plot_binned(df_current[variable], title=f"Distribution at {snapshot_date}")
-
-        box_overall = box_plot_with_extremes(df[variable], title="Box Plot – Overall Data")
-        box_current = box_plot_with_extremes(df_current[variable], title=f"Box Plot – Snapshot {snapshot_date}")
-
-        violin_overall = violin_plot_kde(df[variable], title="Violin Plot – Overall Data")
-        violin_current = violin_plot_kde(df_current[variable], title=f"Violin Plot – Snapshot {snapshot_date}")
-
-        return (
-            summary_table(missing_results["total_summary"], "Missing % (Total)"),
-            summary_table(missing_results["current_summary"], f"Missing % ({snapshot_date})"),
-            summary_table(numeric_results["total_summary"], "Stats (Total)"),
-            summary_table(numeric_results["current_summary"], f"Stats ({snapshot_date})"),
-            metric_options,
-            selected_metrics,
-            "Missing Value Analysis – Total",
-            f"Missing Value Analysis – {snapshot_date}",
-            "Statistical Summary – Total",
-            f"Statistical Summary – {snapshot_date}",
-            line,
-            hist_overall,
-            hist_current,
-            box_overall,
-            box_current,
-            violin_overall,
-            violin_current
-        )
-
-
-
-
-
-last toucpoint
-
-
 # ============================
 # config/settings.py
 # ============================
+
 PROJECT_ID = "your-gcp-project-id"
 DATASET = "your_dataset"
 TABLE = "your_table"
@@ -471,6 +10,7 @@ TIME_COL = "report_date"
 # ============================
 # data/loader.py
 # ============================
+
 from google.cloud import bigquery
 import pandas as pd
 from config.settings import PROJECT_ID, DATASET, TABLE
@@ -485,6 +25,7 @@ def load_data():
 # ============================
 # eda/analyzer.py
 # ============================
+
 import pandas as pd
 from abc import ABC, abstractmethod
 from config.settings import TIME_COL
@@ -565,9 +106,27 @@ class NumericAnalyzer(BaseAnalyzer):
             "time_series": over_time.rename(columns={self.time_col: "date"})
         }
 
+    def box_summary(self):
+        series = self.df[self.variable].astype(float).dropna()
+        q1 = series.quantile(0.25)
+        q3 = series.quantile(0.75)
+        median = series.median()
+        iqr = q3 - q1
+        whisker_low = max(series.min(), q1 - 1.5 * iqr)
+        whisker_high = min(series.max(), q3 + 1.5 * iqr)
+        return {
+            "q1": q1,
+            "q3": q3,
+            "median": median,
+            "whisker_low": whisker_low,
+            "whisker_high": whisker_high,
+            "std_dev": series.std()
+        }
+
 # ============================
 # plots/plot_factory.py
 # ============================
+
 import plotly.express as px
 import dash_table
 import plotly.graph_objects as go
@@ -627,16 +186,75 @@ def histogram_plot_binned(series, title, max_bins=50):
     fig.update_layout(title=title, bargap=0.1, margin=dict(l=10, r=10, t=40, b=10))
     return fig
 
+def box_plot_summary(summary_dict, outlier_points, title):
+    iqr = summary_dict["q3"] - summary_dict["q1"]
+    hover_text = (
+        f"<b>Summary Stats</b><br>"
+        f"Q1: {round(summary_dict['q1'],2)}<br>"
+        f"Median: {round(summary_dict['median'],2)}<br>"
+        f"Q3: {round(summary_dict['q3'],2)}<br>"
+        f"IQR: {round(iqr,2)}<br>"
+        f"Whisker Low: {round(summary_dict['whisker_low'],2)}<br>"
+        f"Whisker High: {round(summary_dict['whisker_high'],2)}<br>"
+        f"Std Dev: {round(summary_dict['std_dev'],2)}"
+    )
+
+    fig = go.Figure()
+    fig.add_shape(
+        type="rect",
+        y0=-0.2, y1=0.2,
+        x0=summary_dict["q1"],
+        x1=summary_dict["q3"],
+        fillcolor="lightblue",
+        opacity=0.5,
+        line=dict(color="blue")
+    )
+    fig.add_shape(
+        type="line",
+        y0=-0.2, y1=0.2,
+        x0=summary_dict["median"],
+        x1=summary_dict["median"],
+        line=dict(color="black", width=2)
+    )
+    fig.add_shape(
+        type="line",
+        y0=0,
+        y1=0,
+        x0=summary_dict["whisker_low"],
+        x1=summary_dict["whisker_high"],
+        line=dict(color="blue", width=1)
+    )
+    fig.add_trace(go.Scatter(
+        x=[(summary_dict["q1"] + summary_dict["q3"]) / 2],
+        y=[0],
+        mode="markers",
+        marker=dict(size=50, color="rgba(0,0,0,0)"),
+        hovertemplate=hover_text,
+        showlegend=False
+    ))
+    if outlier_points is not None and not outlier_points.empty:
+        fig.add_trace(go.Scatter(
+            x=outlier_points,
+            y=[0]*len(outlier_points),
+            mode="markers",
+            marker=dict(color="red", size=6),
+            name="Outliers"
+        ))
+    fig.update_yaxes(visible=False)
+    fig.update_xaxes(title="Value")
+    fig.update_layout(title=title, margin=dict(l=10, r=10, t=40, b=10))
+    return fig
+
 # ============================
 # ui/layout.py
 # ============================
+
 from dash import html, dcc
 import dash_bootstrap_components as dbc
 
 def build_layout(variable_options):
     return dbc.Container([
         html.H2("CECL EDA Dashboard", className="my-4 text-center"),
-
         dbc.Row([
             dbc.Col([
                 html.Label("Select Variable:"),
@@ -648,17 +266,14 @@ def build_layout(variable_options):
                 ),
             ], width=6),
         ], className="mb-4"),
-
         dbc.Row([
             dbc.Col([html.H5(id="missing-title-total"), html.Div(id="summary-total")], width=6),
             dbc.Col([html.H5(id="missing-title-current"), html.Div(id="summary-current")], width=6)
         ], className="mb-4"),
-
         dbc.Row([
             dbc.Col([html.H5(id="numeric-title-total"), html.Div(id="summary-total-numeric")], width=6),
             dbc.Col([html.H5(id="numeric-title-current"), html.Div(id="summary-current-numeric")], width=6)
         ], className="mb-4"),
-
         dbc.Row([
             dbc.Col([
                 html.Label("Select Metric(s) to Plot:"),
@@ -666,21 +281,25 @@ def build_layout(variable_options):
                 dcc.Graph(id="plot-output")
             ])
         ], className="mb-5"),
-
         html.Hr(),
-
         dbc.Row([
             dbc.Col([dcc.Graph(id="histogram-overall")], width=6),
             dbc.Col([dcc.Graph(id="histogram-current")], width=6),
+        ]),
+        html.Hr(),
+        dbc.Row([
+            dbc.Col([dcc.Graph(id="box-overall")], width=6),
+            dbc.Col([dcc.Graph(id="box-current")], width=6)
         ])
     ], fluid=True)
 
 # ============================
 # ui/callbacks.py
 # ============================
+
 from dash import Output, Input
 from eda.analyzer import MissingValueAnalyzer, NumericAnalyzer
-from plots.plot_factory import line_plot, summary_table, histogram_plot_binned
+from plots.plot_factory import line_plot, summary_table, histogram_plot_binned, box_plot_summary
 from config.settings import TIME_COL
 import pandas as pd
 
@@ -699,18 +318,20 @@ def register_callbacks(app, df, numeric_vars):
         Output("plot-output", "figure"),
         Output("histogram-overall", "figure"),
         Output("histogram-current", "figure"),
+        Output("box-overall", "figure"),
+        Output("box-current", "figure"),
         Input("variable-dropdown", "value"),
         Input("metric-dropdown", "value")
     )
     def update_dashboard(variable, selected_metrics):
         if variable is None:
-            return "", "", "", "", [], None, "", "", "", "", {}, {}, {}
+            return "", "", "", "", [], None, "", "", "", "", {}, {}, {}, {}, {}
 
         missing_results = MissingValueAnalyzer(df, variable).run()
-        numeric_results = NumericAnalyzer(df, variable).run()
+        numeric_analyzer = NumericAnalyzer(df, variable)
+        numeric_results = numeric_analyzer.run()
 
         snapshot_date = df[TIME_COL].max().strftime("%b %Y")
-
         combined_df = numeric_results["time_series"]
         if "time_series" in missing_results:
             missing_df = missing_results["time_series"].copy()
@@ -725,11 +346,27 @@ def register_callbacks(app, df, numeric_vars):
 
         filtered_df = combined_df[combined_df["Metric"].isin(selected_metrics)]
 
-        # histograms
-        hist_overall = histogram_plot_binned(df[variable], title="Overall Distribution")
         current_time = df[TIME_COL].max()
         df_current = df[df[TIME_COL] == current_time]
+
+        hist_overall = histogram_plot_binned(df[variable], title="Overall Distribution")
         hist_current = histogram_plot_binned(df_current[variable], title=f"Distribution at {snapshot_date}")
+
+        # box plots
+        box_stats_overall = numeric_analyzer.box_summary()
+        outliers_overall = pd.concat([
+            df[variable].nsmallest(200),
+            df[variable].nlargest(200)
+        ])
+        box_overall = box_plot_summary(box_stats_overall, outliers_overall, title="Box Plot – Overall")
+
+        numeric_analyzer_current = NumericAnalyzer(df_current, variable)
+        box_stats_current = numeric_analyzer_current.box_summary()
+        outliers_current = pd.concat([
+            df_current[variable].nsmallest(200),
+            df_current[variable].nlargest(200)
+        ])
+        box_current = box_plot_summary(box_stats_current, outliers_current, title=f"Box Plot – {snapshot_date}")
 
         return (
             summary_table(missing_results["total_summary"], "Missing % (Total)"),
@@ -744,12 +381,15 @@ def register_callbacks(app, df, numeric_vars):
             f"Statistical Summary – {snapshot_date}",
             line_plot(filtered_df),
             hist_overall,
-            hist_current
+            hist_current,
+            box_overall,
+            box_current
         )
 
 # ============================
 # app.py
 # ============================
+
 from dash import Dash
 from data.loader import load_data
 from ui.layout import build_layout
