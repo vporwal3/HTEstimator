@@ -1,6 +1,13 @@
 box and voilion
 
 
+box_x = [
+    summary_dict["q1"], summary_dict["q3"],
+    summary_dict["q3"], summary_dict["q1"],
+    summary_dict["q1"]
+]
+box_y = [-0.2, -0.2, 0.2, 0.2, -0.2]
+
 # ============================
 # eda/analyzer.py
 # ============================
