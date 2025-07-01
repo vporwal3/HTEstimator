@@ -148,17 +148,111 @@ def box_plot_summary(summary_dict, outlier_points, title):
     return fig
 
 
-add this it callback:
 
-# get summary numbers
-box_stats = numeric_analyzer.box_summary()
-# get extreme points
-outlier_points = pd.concat([
-    series.nsmallest(200),
-    series.nlargest(200)
-])
-# plot
-box_fig = box_plot_summary(box_stats, outlier_points, title="Box Plot")
+# ============================
+# ui/callbacks.py
+# ============================
+from dash import Output, Input
+from eda.analyzer import MissingValueAnalyzer, NumericAnalyzer
+from plots.plot_factory import (
+    line_plot,
+    summary_table,
+    histogram_plot_binned,
+    box_plot_summary
+)
+from config.settings import TIME_COL
+import pandas as pd
+
+def register_callbacks(app, df, numeric_vars):
+    @app.callback(
+        Output("summary-total", "children"),
+        Output("summary-current", "children"),
+        Output("summary-total-numeric", "children"),
+        Output("summary-current-numeric", "children"),
+        Output("metric-dropdown", "options"),
+        Output("metric-dropdown", "value"),
+        Output("missing-title-total", "children"),
+        Output("missing-title-current", "children"),
+        Output("numeric-title-total", "children"),
+        Output("numeric-title-current", "children"),
+        Output("plot-output", "figure"),
+        Output("histogram-overall", "figure"),
+        Output("histogram-current", "figure"),
+        Output("box-overall", "figure"),
+        Output("box-current", "figure"),
+        Input("variable-dropdown", "value"),
+        Input("metric-dropdown", "value")
+    )
+    def update_dashboard(variable, selected_metrics):
+        if variable is None:
+            return "", "", "", "", [], None, "", "", "", "", {}, {}, {}, {}, {}
+
+        # analyzers
+        missing_results = MissingValueAnalyzer(df, variable).run()
+        numeric_analyzer = NumericAnalyzer(df, variable)
+        numeric_results = numeric_analyzer.run()
+
+        snapshot_date = df[TIME_COL].max().strftime("%b %Y")
+
+        combined_df = numeric_results["time_series"]
+        if "time_series" in missing_results:
+            missing_df = missing_results["time_series"].copy()
+            missing_df["Metric"] = "Missing %"
+            combined_df = pd.concat([combined_df, missing_df], ignore_index=True)
+
+        available_metrics = combined_df["Metric"].unique()
+        metric_options = [{"label": m, "value": m} for m in available_metrics]
+
+        if not selected_metrics:
+            selected_metrics = ["Mean"] if "Mean" in available_metrics else list(available_metrics)
+
+        filtered_df = combined_df[combined_df["Metric"].isin(selected_metrics)]
+
+        # current snapshot
+        current_time = df[TIME_COL].max()
+        df_current = df[df[TIME_COL] == current_time]
+
+        # line plot
+        line = line_plot(filtered_df)
+
+        # histograms
+        hist_overall = histogram_plot_binned(df[variable], title="Overall Distribution")
+        hist_current = histogram_plot_binned(df_current[variable], title=f"Distribution at {snapshot_date}")
+
+        # box plot
+        box_stats_overall = numeric_analyzer.box_summary()
+        outlier_points_overall = pd.concat([
+            df[variable].nsmallest(200),
+            df[variable].nlargest(200)
+        ])
+        box_overall = box_plot_summary(box_stats_overall, outlier_points_overall, title="Box Plot – Overall Data")
+
+        # box plot current
+        numeric_analyzer_current = NumericAnalyzer(df_current, variable)
+        box_stats_current = numeric_analyzer_current.box_summary()
+        outlier_points_current = pd.concat([
+            df_current[variable].nsmallest(200),
+            df_current[variable].nlargest(200)
+        ])
+        box_current = box_plot_summary(box_stats_current, outlier_points_current, title=f"Box Plot – Snapshot {snapshot_date}")
+
+        return (
+            summary_table(missing_results["total_summary"], "Missing % (Total)"),
+            summary_table(missing_results["current_summary"], f"Missing % ({snapshot_date})"),
+            summary_table(numeric_results["total_summary"], "Stats (Total)"),
+            summary_table(numeric_results["current_summary"], f"Stats ({snapshot_date})"),
+            metric_options,
+            selected_metrics,
+            "Missing Value Analysis – Total",
+            f"Missing Value Analysis – {snapshot_date}",
+            "Statistical Summary – Total",
+            f"Statistical Summary – {snapshot_date}",
+            line,
+            hist_overall,
+            hist_current,
+            box_overall,
+            box_current
+        )
 
 
 
