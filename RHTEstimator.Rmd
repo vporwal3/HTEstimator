@@ -1,3 +1,195 @@
+box and voilion
+
+# ============================
+# plots/plot_factory.py
+# ============================
+
+import plotly.express as px
+import plotly.graph_objects as go
+import numpy as np
+from scipy.stats import gaussian_kde
+import dash_table
+
+def summary_table(summary_dict, title):
+    rows = [{"Metric": k, "Value": v} for k, v in summary_dict.items()]
+    return dash_table.DataTable(
+        columns=[{"name": i, "id": i} for i in ["Metric", "Value"]],
+        data=rows,
+        style_table={"overflowX": "auto"},
+        style_cell={"textAlign": "left"},
+    )
+
+def box_plot_with_extremes(series, title):
+    series = series.dropna()
+    q1 = series.quantile(0.25)
+    q3 = series.quantile(0.75)
+    median = series.median()
+    iqr = q3 - q1
+    whisker_low = max(series.min(), q1 - 1.5 * iqr)
+    whisker_high = min(series.max(), q3 + 1.5 * iqr)
+
+    # outliers
+    extreme_points = series[(series < series.quantile(0.01)) | (series > series.quantile(0.99))]
+
+    fig = go.Figure()
+
+    fig.add_trace(go.Box(
+        y=series,
+        name="Box Summary",
+        boxpoints=False,
+        marker_color="lightblue"
+    ))
+
+    fig.add_trace(go.Scatter(
+        y=extreme_points,
+        mode="markers",
+        name="Extreme Values (1–99%)",
+        marker=dict(color="red", size=6, symbol="circle")
+    ))
+
+    fig.update_layout(title=title, yaxis_title="Value", margin=dict(l=10,r=10,t=40,b=10))
+    return fig
+
+def violin_plot_kde(series, title, max_points=500):
+    series = series.dropna()
+    series = series[series >= 0]  # drop negatives if any
+    kde = gaussian_kde(series)
+    x_grid = np.linspace(series.quantile(0.01), series.quantile(0.99), max_points)
+    y_density = kde(x_grid)
+
+    fig = go.Figure()
+
+    # mirror the density for violin
+    fig.add_trace(go.Scatter(
+        x=y_density,
+        y=x_grid,
+        mode="lines",
+        name="Density +",
+        line=dict(color="blue")
+    ))
+    fig.add_trace(go.Scatter(
+        x=-y_density,
+        y=x_grid,
+        mode="lines",
+        name="Density -",
+        line=dict(color="blue"),
+        showlegend=False
+    ))
+
+    # median and IQR overlays
+    q1 = series.quantile(0.25)
+    q3 = series.quantile(0.75)
+    median = series.median()
+
+    fig.add_shape(type="line", x0=-y_density.max(), x1=y_density.max(), y0=median, y1=median,
+                  line=dict(color="black", width=2, dash="dash"), name="Median")
+    fig.add_shape(type="rect", x0=-y_density.max(), x1=y_density.max(), y0=q1, y1=q3,
+                  line=dict(color="black", width=1), fillcolor="lightgrey", opacity=0.2)
+
+    fig.update_xaxes(title="Density", showgrid=True)
+    fig.update_yaxes(title="Value")
+    fig.update_layout(title=title, margin=dict(l=10,r=10,t=40,b=10))
+    return fig
+
+# ============================
+# ui/layout.py
+# ============================
+
+from dash import html, dcc
+import dash_bootstrap_components as dbc
+
+def build_layout(variable_options):
+    return dbc.Container([
+        html.H2("CECL EDA Dashboard", className="my-4 text-center"),
+
+        dbc.Row([
+            dbc.Col([
+                html.Label("Select Variable:"),
+                dcc.Dropdown(
+                    id="variable-dropdown",
+                    options=variable_options,
+                    placeholder="Select a variable",
+                    value=variable_options[0]["value"] if variable_options else None
+                ),
+            ], width=6),
+        ], className="mb-4"),
+
+        dbc.Row([
+            dbc.Col([dcc.Graph(id="box-overall")], width=6),
+            dbc.Col([dcc.Graph(id="box-current")], width=6)
+        ], className="mb-5"),
+
+        html.Hr(),
+
+        dbc.Row([
+            dbc.Col([dcc.Graph(id="violin-overall")], width=6),
+            dbc.Col([dcc.Graph(id="violin-current")], width=6)
+        ], className="mb-5"),
+    ], fluid=True)
+
+# ============================
+# ui/callbacks.py
+# ============================
+
+from dash import Output, Input
+from eda.analyzer import MissingValueAnalyzer, NumericAnalyzer
+from plots.plot_factory import box_plot_with_extremes, violin_plot_kde
+from config.settings import TIME_COL
+import pandas as pd
+
+def register_callbacks(app, df, numeric_vars):
+    @app.callback(
+        Output("box-overall", "figure"),
+        Output("box-current", "figure"),
+        Output("violin-overall", "figure"),
+        Output("violin-current", "figure"),
+        Input("variable-dropdown", "value")
+    )
+    def update_dashboard(variable):
+        if variable is None:
+            return {}, {}, {}, {}
+
+        current_time = df[TIME_COL].max()
+        df_current = df[df[TIME_COL] == current_time]
+
+        box_overall = box_plot_with_extremes(df[variable], title="Box Plot – Overall Data")
+        box_current = box_plot_with_extremes(df_current[variable], title=f"Box Plot – Snapshot {current_time.strftime('%b %Y')}")
+
+        violin_overall = violin_plot_kde(df[variable], title="Violin Plot – Overall Data")
+        violin_current = violin_plot_kde(df_current[variable], title=f"Violin Plot – Snapshot {current_time.strftime('%b %Y')}")
+
+        return box_overall, box_current, violin_overall, violin_current
+
+# ============================
+# app.py
+# ============================
+
+from dash import Dash
+from data.loader import load_data
+from ui.layout import build_layout
+from ui.callbacks import register_callbacks
+
+df = load_data()
+numeric_vars = df.select_dtypes(include="number").columns.tolist()
+
+app = Dash(__name__, external_stylesheets=["https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css"])
+app.layout = build_layout([{"label": v, "value": v} for v in numeric_vars])
+register_callbacks(app, df, numeric_vars)
+
+if __name__ == "__main__":
+    app.run_server(host="0.0.0.0", port=8050, debug=True)
+
+
+
+
+
+
+
+
+
+last toucpoint
+
+
 # ============================
 # config/settings.py
 # ============================
