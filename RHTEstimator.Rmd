@@ -1,3 +1,180 @@
+import plotly.express as px
+import dash_table
+import numpy as np
+import pandas as pd
+
+def line_plot(df, metric=None):
+    if "Metric" in df.columns and metric:
+        df = df[df["Metric"].isin(metric)]
+    fig = px.line(df, x="date", y="value", color="Metric")
+    return fig
+
+def summary_table(summary_dict, title):
+    rows = [{"Metric": k, "Value": v} for k, v in summary_dict.items()]
+    return dash_table.DataTable(
+        columns=[{"name": i, "id": i} for i in ["Metric", "Value"]],
+        data=rows,
+        style_table={"overflowX": "auto"},
+        style_cell={"textAlign": "left"},
+    )
+
+def histogram_plot_binned(series, title, max_bins=50):
+    series = series.dropna()
+    n = len(series)
+
+    # Freedman-Diaconis bin width
+    iqr = series.quantile(0.75) - series.quantile(0.25)
+    bin_width = 2 * iqr / np.cbrt(n)
+    if bin_width == 0:
+        bin_width = (series.max() - series.min()) / 10  # fallback
+    num_bins = int((series.max() - series.min()) / bin_width)
+    num_bins = min(num_bins, max_bins)
+    if num_bins <= 0:
+        num_bins = 10
+
+    counts, bin_edges = np.histogram(series, bins=num_bins)
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+
+    df_bins = pd.DataFrame({
+        "bin_center": bin_centers,
+        "count": counts,
+        "bin_range": [f"{round(left,2)}–{round(right,2)}" for left, right in zip(bin_edges[:-1], bin_edges[1:])]
+    })
+
+    fig = px.bar(
+        df_bins,
+        x="bin_center",
+        y="count",
+        hover_data=["bin_range"],
+        title=title,
+        labels={"bin_center": "Value", "count": "Count"}
+    )
+    fig.update_layout(margin=dict(l=10, r=10, t=40, b=10))
+    return fig
+
+
+from dash import html, dcc
+import dash_bootstrap_components as dbc
+
+def build_layout(variable_options):
+    return dbc.Container([
+        html.H2("CECL EDA Dashboard", className="my-4 text-center"),
+
+        dbc.Row([
+            dbc.Col([
+                html.Label("Select Variable:"),
+                dcc.Dropdown(
+                    id='variable-dropdown',
+                    options=variable_options,
+                    placeholder="Select a variable",
+                    value=variable_options[0]['value'] if variable_options else None
+                )
+            ], width=6)
+        ], className="mb-4"),
+
+        dbc.Row([
+            dbc.Col([html.H5(id="missing-title-total"), html.Div(id="summary-total")], width=6),
+            dbc.Col([html.H5(id="missing-title-current"), html.Div(id="summary-current")], width=6)
+        ], className="mb-4"),
+
+        dbc.Row([
+            dbc.Col([html.H5(id="numeric-title-total"), html.Div(id="summary-total-numeric")], width=6),
+            dbc.Col([html.H5(id="numeric-title-current"), html.Div(id="summary-current-numeric")], width=6)
+        ], className="mb-4"),
+
+        dbc.Row([
+            dbc.Col([
+                html.Label("Select Metric(s) to Plot:"),
+                dcc.Dropdown(id="metric-dropdown", multi=True),
+                dcc.Graph(id="plot-output")
+            ])
+        ], className="mb-5"),
+
+        html.Hr(),
+
+        dbc.Row([
+            dbc.Col([
+                html.H5("Histogram – Overall Data"),
+                dcc.Graph(id="histogram-overall")
+            ], width=6),
+            dbc.Col([
+                html.H5("Histogram – Current Snapshot"),
+                dcc.Graph(id="histogram-current")
+            ], width=6)
+        ])
+    ], fluid=True)
+
+
+from dash import Output, Input
+from eda.analyzer import MissingValueAnalyzer, NumericAnalyzer
+from plots.plot_factory import line_plot, summary_table, histogram_plot_binned
+from config.settings import TIME_COL
+
+def register_callbacks(app, df, numeric_vars):
+    @app.callback(
+        Output("summary-total", "children"),
+        Output("summary-current", "children"),
+        Output("summary-total-numeric", "children"),
+        Output("summary-current-numeric", "children"),
+        Output("metric-dropdown", "options"),
+        Output("metric-dropdown", "value"),
+        Output("missing-title-total", "children"),
+        Output("missing-title-current", "children"),
+        Output("numeric-title-total", "children"),
+        Output("numeric-title-current", "children"),
+        Output("plot-output", "figure"),
+        Output("histogram-overall", "figure"),
+        Output("histogram-current", "figure"),
+        Input("variable-dropdown", "value"),
+        Input("metric-dropdown", "value")
+    )
+    def update_dashboard(variable, selected_metrics):
+        if variable is None:
+            return "", "", "", "", [], None, "", "", "", "", {}, {}, {}
+
+        missing_results = MissingValueAnalyzer(df, variable).run()
+        numeric_results = NumericAnalyzer(df, variable).run()
+        snapshot_date = df[TIME_COL].max().strftime("%b %Y")
+
+        combined_df = numeric_results["time_series"]
+        if "time_series" in missing_results:
+            missing_df = missing_results["time_series"].copy()
+            missing_df["Metric"] = "Missing %"
+            combined_df = pd.concat([combined_df, missing_df], ignore_index=True)
+
+        available_metrics = combined_df["Metric"].unique()
+        metric_options = [{"label": m, "value": m} for m in available_metrics]
+        if not selected_metrics:
+            selected_metrics = ["Mean"]
+
+        filtered_df = combined_df[combined_df["Metric"].isin(selected_metrics)]
+
+        # histograms
+        hist_overall = histogram_plot_binned(df[variable], title="Overall Distribution")
+        current_time = df[TIME_COL].max()
+        df_current = df[df[TIME_COL] == current_time]
+        hist_current = histogram_plot_binned(df_current[variable], title=f"Distribution at {snapshot_date}")
+
+        return (
+            summary_table(missing_results["total_summary"], "Missing % (Total)"),
+            summary_table(missing_results["current_summary"], f"Missing % ({snapshot_date})"),
+            summary_table(numeric_results["total_summary"], "Stats (Total)"),
+            summary_table(numeric_results["current_summary"], f"Stats ({snapshot_date})"),
+            metric_options,
+            selected_metrics,
+            "Missing Value Analysis – Total",
+            f"Missing Value Analysis – {snapshot_date}",
+            "Statistical Summary – Total",
+            f"Statistical Summary – {snapshot_date}",
+            line_plot(filtered_df),
+            hist_overall,
+            hist_current
+        )
+
+
+
+
+
 # in data/loader.py
 import os
 
