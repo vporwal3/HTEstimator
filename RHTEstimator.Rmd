@@ -1,136 +1,169 @@
 box and voilion
 
+
+# ============================
+# eda/analyzer.py
+# ============================
+import pandas as pd
+from abc import ABC, abstractmethod
+from config.settings import TIME_COL
+
+class BaseAnalyzer(ABC):
+    def __init__(self, df, variable, time_col=TIME_COL):
+        self.df = df
+        self.variable = variable
+        self.time_col = time_col
+
+    @abstractmethod
+    def run(self):
+        pass
+
+class NumericAnalyzer(BaseAnalyzer):
+    def run(self):
+        self.df[self.variable] = self.df[self.variable].astype(float)
+        series = self.df[self.variable]
+        current_time = self.df[self.time_col].max()
+        current_series = self.df[self.df[self.time_col] == current_time][self.variable]
+
+        total_summary = {
+            "Mean": round(series.mean(), 2),
+            "Median": round(series.median(), 2),
+            "25th %ile": round(series.quantile(0.25), 2),
+            "75th %ile": round(series.quantile(0.75), 2),
+            "Std Dev": round(series.std(), 2),
+            "Min": round(series.min(), 2),
+            "Max": round(series.max(), 2),
+        }
+
+        current_summary = {
+            "Mean": round(current_series.mean(), 2),
+            "Median": round(current_series.median(), 2),
+            "25th %ile": round(current_series.quantile(0.25), 2),
+            "75th %ile": round(current_series.quantile(0.75), 2),
+            "Std Dev": round(current_series.std(), 2),
+            "Min": round(current_series.min(), 2),
+            "Max": round(current_series.max(), 2),
+        }
+
+        grouped = self.df.set_index(self.time_col).groupby(pd.Grouper(freq="M"))[self.variable]
+        over_time = pd.DataFrame({
+            "Mean": grouped.mean(),
+            "Median": grouped.median(),
+            "25th %ile": grouped.quantile(0.25),
+            "75th %ile": grouped.quantile(0.75),
+            "Std Dev": grouped.std(),
+            "Min": grouped.min(),
+            "Max": grouped.max(),
+        }).reset_index().melt(id_vars=[self.time_col], var_name="Metric", value_name="value")
+
+        return {
+            "total_summary": total_summary,
+            "current_summary": current_summary,
+            "time_series": over_time.rename(columns={self.time_col: "date"})
+        }
+
+    def box_summary(self):
+        series = self.df[self.variable].astype(float).dropna()
+        q1 = series.quantile(0.25)
+        q3 = series.quantile(0.75)
+        median = series.median()
+        iqr = q3 - q1
+        whisker_low = max(series.min(), q1 - 1.5 * iqr)
+        whisker_high = min(series.max(), q3 + 1.5 * iqr)
+
+        return {
+            "q1": q1,
+            "q3": q3,
+            "median": median,
+            "whisker_low": whisker_low,
+            "whisker_high": whisker_high
+        }
+
+
+
 # ============================
 # plots/plot_factory.py
 # ============================
-
-import plotly.express as px
 import plotly.graph_objects as go
-import numpy as np
-from scipy.stats import gaussian_kde
-import dash_table
 
-def summary_table(summary_dict, title):
-    rows = [{"Metric": k, "Value": v} for k, v in summary_dict.items()]
-    return dash_table.DataTable(
-        columns=[{"name": i, "id": i} for i in ["Metric", "Value"]],
-        data=rows,
-        style_table={"overflowX": "auto"},
-        style_cell={"textAlign": "left"},
+def box_plot_summary(summary_dict, outlier_points, title):
+    """
+    Plots a box summary with:
+    - box range (q1, q3)
+    - median line
+    - whiskers
+    - explicit outlier points
+    """
+
+    fig = go.Figure()
+
+    # draw box rectangle
+    fig.add_shape(
+        type="rect",
+        x0=-0.2, x1=0.2,
+        y0=summary_dict["q1"],
+        y1=summary_dict["q3"],
+        fillcolor="lightblue",
+        opacity=0.5,
+        line=dict(color="blue"),
+        name="IQR"
     )
 
-def box_plot_with_extremes(series, title):
-    series = series.dropna()
-    q1 = series.quantile(0.25)
-    q3 = series.quantile(0.75)
-    median = series.median()
-    iqr = q3 - q1
-    whisker_low = max(series.min(), q1 - 1.5 * iqr)
-    whisker_high = min(series.max(), q3 + 1.5 * iqr)
+    # median
+    fig.add_shape(
+        type="line",
+        x0=-0.2, x1=0.2,
+        y0=summary_dict["median"],
+        y1=summary_dict["median"],
+        line=dict(color="black", width=2),
+        name="Median"
+    )
 
-    # outliers
-    extreme_points = pd.concat([
-    series.nsmallest(200),
-    series.nlargest(200)
-])
+    # whiskers
+    fig.add_shape(
+        type="line",
+        x0=0, x1=0,
+        y0=summary_dict["whisker_low"],
+        y1=summary_dict["whisker_high"],
+        line=dict(color="blue", width=1),
+        name="Whiskers"
+    )
 
-    fig = go.Figure()
+    # outlier scatter
+    if outlier_points is not None and not outlier_points.empty:
+        fig.add_trace(go.Scatter(
+            x=[0]*len(outlier_points),
+            y=outlier_points,
+            mode="markers",
+            marker=dict(color="red", size=6),
+            name="Outliers"
+        ))
 
-    fig.add_trace(go.Box(
-        y=series,
-        name="Box Summary",
-        boxpoints=False,
-        marker_color="lightblue"
-    ))
-
-    fig.add_trace(go.Scatter(
-        y=extreme_points,
-        mode="markers",
-        name="Extreme Values (1–99%)",
-        marker=dict(color="red", size=6, symbol="circle")
-    ))
-
-    fig.update_layout(title=title, yaxis_title="Value", margin=dict(l=10,r=10,t=40,b=10))
-    return fig
-
-from scipy.stats import gaussian_kde
-import plotly.graph_objects as go
-import numpy as np
-
-def violin_plot_kde(series, title, max_grid=500):
-    """
-    Builds a violin plot from a server-side KDE and overlays median + IQR.
-    Uses only 500 grid points to send to frontend.
-    """
-    series = series.dropna()
-    # only consider positive for KDE if appropriate
-    series = series[series >= 0]
-
-    if len(series) < 10:
-        # too small to estimate KDE
-        return go.Figure()
-
-    # build KDE on the server
-    kde = gaussian_kde(series)
-
-    # use 1–99% to avoid extreme tails
-    lower = series.quantile(0.01)
-    upper = series.quantile(0.99)
-    grid_y = np.linspace(lower, upper, max_grid)
-    density = kde(grid_y)
-
-    fig = go.Figure()
-
-    # positive side of violin
-    fig.add_trace(go.Scatter(
-        x=density,
-        y=grid_y,
-        mode="lines",
-        fill="tonextx",
-        line=dict(color="lightblue"),
-        name="Density +"
-    ))
-
-    # negative side
-    fig.add_trace(go.Scatter(
-        x=-density,
-        y=grid_y,
-        mode="lines",
-        fill="tonextx",
-        line=dict(color="lightblue"),
-        showlegend=False
-    ))
-
-    # overlay median & IQR
-    q1 = series.quantile(0.25)
-    q3 = series.quantile(0.75)
-    median = series.median()
-
-    # IQR box
-    fig.add_shape(type="rect",
-                  x0=-density.max(),
-                  x1=density.max(),
-                  y0=q1,
-                  y1=q3,
-                  line=dict(color="black", width=1),
-                  fillcolor="lightgrey",
-                  opacity=0.2)
-
-    # median line
-    fig.add_shape(type="line",
-                  x0=-density.max(),
-                  x1=density.max(),
-                  y0=median,
-                  y1=median,
-                  line=dict(color="black", width=2, dash="dash"))
-
-    fig.update_xaxes(title="Density", showgrid=True)
+    fig.update_xaxes(visible=False)
     fig.update_yaxes(title="Value")
     fig.update_layout(
         title=title,
         margin=dict(l=10, r=10, t=40, b=10)
     )
     return fig
+
+
+add this it callback:
+
+# get summary numbers
+box_stats = numeric_analyzer.box_summary()
+# get extreme points
+outlier_points = pd.concat([
+    series.nsmallest(200),
+    series.nlargest(200)
+])
+# plot
+box_fig = box_plot_summary(box_stats, outlier_points, title="Box Plot")
+
+
+
+
+
 
 
 from dash import html, dcc
