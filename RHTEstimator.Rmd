@@ -1,12 +1,23 @@
 box and voilion
 
 
+# overlay hoverable scatter to cover entire box
 box_x = [
     summary_dict["q1"], summary_dict["q3"],
     summary_dict["q3"], summary_dict["q1"],
     summary_dict["q1"]
 ]
 box_y = [-0.2, -0.2, 0.2, 0.2, -0.2]
+
+fig.add_trace(go.Scatter(
+    x=box_x,
+    y=box_y,
+    fill="toself",
+    fillcolor="rgba(0,0,0,0)",
+    line=dict(color="rgba(0,0,0,0)"),
+    hovertemplate=hover_text,
+    showlegend=False
+))
 
 # ============================
 # eda/analyzer.py
