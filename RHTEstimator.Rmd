@@ -29,7 +29,10 @@ def box_plot_with_extremes(series, title):
     whisker_high = min(series.max(), q3 + 1.5 * iqr)
 
     # outliers
-    extreme_points = series[(series < series.quantile(0.01)) | (series > series.quantile(0.99))]
+    extreme_points = pd.concat([
+    series.nsmallest(200),
+    series.nlargest(200)
+])
 
     fig = go.Figure()
 
