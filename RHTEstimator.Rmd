@@ -1,16 +1,31 @@
-def histogram_plot_binned(series, title, max_bins=50):
-    series = series.dropna()
-    series = series[series > 0]  # cannot log(0)
-    log_series = np.log1p(series)  # log(x + 1)
+ldef histogram_plot_binned(series, title, max_bins=50):
+    import numpy as np
+    import pandas as pd
+    import plotly.express as px
 
+    # keep zeros, drop negatives only
+    series = series.dropna()
+    series = series[series >= 0]
+
+    # log transform (preserve zeros)
+    log_series = np.log1p(series)
+
+    # calculate bin edges on log scale
     lower = log_series.quantile(0.01)
     upper = log_series.quantile(0.99)
+
+    # fallback if identical (avoid zero-width bins)
+    if lower == upper:
+        lower = log_series.min()
+        upper = log_series.max() + 1e-3
+
     bin_edges = np.linspace(lower, upper, max_bins + 1)
 
+    # bin counts
     counts, _ = np.histogram(log_series, bins=bin_edges)
-    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
 
-    # Convert back to original scale for labeling
+    # bin centers back in original scale
+    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
     bin_centers_original = np.expm1(bin_centers)
 
     df_bins = pd.DataFrame({
@@ -30,6 +45,7 @@ def histogram_plot_binned(series, title, max_bins=50):
         title=title,
         labels={"bin_center": "Value", "count": "Count"}
     )
+
     fig.update_layout(margin=dict(l=10, r=10, t=40, b=10))
     return fig
 
