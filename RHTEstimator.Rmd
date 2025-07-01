@@ -1,35 +1,26 @@
-ldef histogram_plot_binned(series, title, max_bins=50):
+def histogram_plot_binned(series, title, max_bins=50):
     import numpy as np
     import pandas as pd
     import plotly.express as px
 
-    # keep zeros, drop negatives only
     series = series.dropna()
     series = series[series >= 0]
-
-    # log transform (preserve zeros)
     log_series = np.log1p(series)
 
-    # calculate bin edges on log scale
     lower = log_series.quantile(0.01)
     upper = log_series.quantile(0.99)
 
-    # fallback if identical (avoid zero-width bins)
     if lower == upper:
         lower = log_series.min()
         upper = log_series.max() + 1e-3
 
     bin_edges = np.linspace(lower, upper, max_bins + 1)
-
-    # bin counts
     counts, _ = np.histogram(log_series, bins=bin_edges)
 
-    # bin centers back in original scale
-    bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-    bin_centers_original = np.expm1(bin_centers)
+    bin_centers_log = (bin_edges[:-1] + bin_edges[1:]) / 2
 
     df_bins = pd.DataFrame({
-        "bin_center": bin_centers_original,
+        "bin_center_log": bin_centers_log,
         "count": counts,
         "bin_range": [
             f"{round(np.expm1(left),2)}–{round(np.expm1(right),2)}"
@@ -39,15 +30,20 @@ ldef histogram_plot_binned(series, title, max_bins=50):
 
     fig = px.bar(
         df_bins,
-        x="bin_center",
+        x="bin_center_log",
         y="count",
         hover_data=["bin_range"],
         title=title,
-        labels={"bin_center": "Value", "count": "Count"}
+        labels={"bin_center_log": "Value (log scale)", "count": "Count"}
     )
 
+    # set x axis to log
+    fig.update_xaxes(type="log", tickvals=bin_centers_log,
+        ticktext=[f"{round(np.expm1(c),2)}" for c in bin_centers_log]
+    )
     fig.update_layout(margin=dict(l=10, r=10, t=40, b=10))
     return fig
+
 
 
 
