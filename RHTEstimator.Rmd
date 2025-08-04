@@ -1,14 +1,5 @@
-df['INT_RATE_Z'] = df.groupby('CLIENT_NAME')['INT_RATE'].transform(lambda x: (x - x.mean()) / x.std(ddof=0))
+Goal:
+Foster collaboration and transparency across cross-functional teams while delivering analytical insights that support strategic initiatives.
 
-df['IS_SPIKE'] = df['INT_RATE_Z'] > 1.5
-
-def is_quarterly_spike(group):
-    spikes = group.loc[group['IS_SPIKE'], 'DATE'].sort_values()
-    if len(spikes) < 3:
-        return False
-    diffs = spikes.diff().dt.days.dropna()
-    # Approx 90-day difference → quarterly
-    return (diffs.between(80, 100).sum() >= 2)  # can tune this threshold
-
-quarterly_clients = df.groupby('CLIENT_NAME').filter(is_quarterly_spike)['CLIENT_NAME'].unique()
-
+Description:
+Actively engage with cross-functional teams including Finance, Treasury, and Model Risk to ensure alignment on deliverables, share knowledge, and maintain open communication. Take ownership of assigned analyses and contribute to team discussions and documentation, while supporting a culture of accountability, mutual respect, and continuous improvement.
