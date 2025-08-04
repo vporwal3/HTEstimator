@@ -1,3 +1,15 @@
+Support finalization, validation, and deployment of the Dynamic Credit Surveillance Tool (DST) for Middle Market and Small Business portfolios.
+
+Description:
+	•	Conduct rigorous testing and performance validation of the DST model to ensure it meets business objectives and accurately flags credit deterioration.
+	•	Collaborate with the credit risk team to gather feedback, confirm alignment with user expectations, and ensure practical usability of the tool.
+	•	Maintain clear and comprehensive model documentation, addressing all Model Risk Governance requirements proactively and thoroughly.
+	•	Respond to model risk review questions in a timely and detailed manner to support successful model approval.
+	•	Assist in evaluating and implementing deployment strategies that are most efficient and convenient for the credit risk team’s workflow and ongoing monitoring.
+
+
+
+
 Goal:
 Contribute proactively to team objectives through reliable execution, knowledge sharing, and collaboration across quant teams.
 
