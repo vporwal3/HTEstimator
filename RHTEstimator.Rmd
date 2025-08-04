@@ -1,3 +1,8 @@
+Provide flexible support to the PPNR modeling team in development, documentation, and governance activities for key income and expense line items.
+
+Description:
+	•	Contribute to modeling efforts across multiple PPNR components by assisting with data preparation, exploratory analysis, and model estimation as needed.
+
 Contribute to the end-to-end redevelopment of deposit beta models for IBD Commercial, Public Commercial MMDA, and MMDA Select Promo/Exec products.
 
 Description:
