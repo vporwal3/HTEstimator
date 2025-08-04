@@ -1,3 +1,44 @@
+📌 Performance Evaluation Comment (Mid-Year 2025)
+
+During the first half of 2025, I contributed meaningfully across multiple high-priority initiatives within Credit Risk and Quantitative Modeling, consistently demonstrating technical ownership, initiative, and cross-team collaboration. My work spanned end-to-end model development, statistical research, dashboarding, and automation efforts — all aligned with improving model quality, accelerating execution, and supporting business and regulatory objectives.
+
+1. Dynamic Credit Surveillance Tool – Middle Market and Small Business
+I led the full development of the DST codebase, supporting early credit deterioration detection across four client segments. This included identifying optimal data sources (CRR, CAM, Review), engineering a panel dataset using optimized parallel ETL (cutting run time to ~15 minutes), and building a preprocessing pipeline leveraging a new Weight of Evidence (WOE) binning technique that uses optimization methods to determine bin thresholds — improving AUC, precision, and recall by 8–10%.
+I also integrated a novel MFA selection package that reduced model generation time from several hours to minutes. Finalized models achieved AUC >0.75 (vs. ~0.65 in legacy versions), offering significant improvements in predictive power. I also created a custom backtesting framework for panel data and led presentations to the credit risk team.
+Business impact: The tool supports focused client reviews, allowing the credit risk team to prioritize the riskiest 100–200 clients across MM/SB portfolios.
+
+2. Deposit Beta Redevelopment
+I played a lead role in the redevelopment of beta models for three key products: IBD Commercial, Public Commercial MMDA, and MMDA Select Promo/Exec. I developed an interactive dashboard (Python + Plotly Dash) capable of handling 5M+ rows, enabling dynamic segmentation analysis and accelerating decision-making on grouping criteria.
+Model improvements led to ~15% reductions in backtesting errors (MAE, RMSE) for Public Commercial MMDA, without compromising stability under different FFR scenarios.
+Business impact: These models feed directly into NII and EVE calculations, supporting Treasury’s interest rate risk management framework.
+
+3. PPNR Modeling Support
+I provided flexible support across several income line items, including initial modeling for the Credit Card Income series and normalization strategies for Investment Banking & Debt Placement sub-items. I also contributed to internal research on model testing standards.
+Though not a primary developer, I made consistent contributions and frequently stepped in when help was needed, managing priorities across projects.
+
+4. C&I Loss Forecasting – 2025 CASTA
+To support an understaffed C&I modeling team, I developed a robust segmentation framework using rolling-window statistical testing (Chi-squared, Mann-Whitney, PCA), helping justify a shift from business group-based to commitment-based segmentation.
+I also built a high-performance EDA dashboard (Plotly Dash) for interactive exploration of millions of rows, enabling the team to visualize and evaluate model drivers in real time.
+Business impact: My contributions helped accelerate the model cycle for a CASTA-critical loss forecasting submission.
+
+5. Due Diligence Report QA Automation
+In collaboration with the KTO Automation team, I helped build two parallel solutions: (a) a statistical scoring engine and (b) a GenAI-based pipeline to flag and summarize risky elements in diligence reports.
+Business impact: This modernized a legacy random-review process, improving coverage of high-risk reports while saving manual review time.
+
+6. Transactions Data Extraction & Dashboarding
+I led the ETL pipeline for extracting transaction data and built a Looker Studio dashboard to visualize trends and patterns in near real time.
+Business impact: This foundational step supports integration of transactional signals into future credit risk models.
+
+7. CRE Performance Database Prototype
+I collaborated with our group head and senior executives to build a prototype structure for consolidating CRE loan performance data, currently siloed in Excel.
+Business impact: This will support long-term efforts around monitoring, early warning systems, and credit risk modeling for CRE portfolios.
+
+⸻
+
+🔚 Closing Summary
+
+Across these efforts, I have taken initiative, delivered technically sound work, and continuously looked for ways to improve team efficiency — whether by introducing new packages, building tools to accelerate analysis, or stepping in to support other teams. I’ve grown in my ability to work independently while maintaining clear documentation and communication, and I look forward to continuing to contribute to model quality, automation, and strategic impact in the second half of 2025.
+
 Provide flexible support to the PPNR modeling team in development, documentation, and governance activities for key income and expense line items.
 
 Description:
