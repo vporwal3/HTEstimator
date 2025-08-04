@@ -1,3 +1,6 @@
+conda install -c conda-forge x13arima-seats
+
+
 📌 Performance Evaluation Comment (Mid-Year 2025)
 
 During the first half of 2025, I contributed meaningfully across multiple high-priority initiatives within Credit Risk and Quantitative Modeling, consistently demonstrating technical ownership, initiative, and cross-team collaboration. My work spanned end-to-end model development, statistical research, dashboarding, and automation efforts — all aligned with improving model quality, accelerating execution, and supporting business and regulatory objectives.
