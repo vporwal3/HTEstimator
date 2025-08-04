@@ -1,7 +1,15 @@
 https://anaconda.org/conda-forge/x13arima-seats/files
 conda install -c conda-forge x13arima-seats
 
+Actions Relative to Risks and Control Goals
+In the first half of 2025, I ensured that all modeling, analysis, and automation work adhered to KeyBank’s model risk management and data governance standards. This included:
+	•	Maintaining clear, complete documentation for each project to support Model Risk review and future audit requirements.
+	•	Proactively addressing potential model risk concerns during development, such as validating data sources, testing for stability under multiple scenarios, and aligning segmentation or methodology changes with statistical evidence.
+	•	Building reproducible, transparent workflows (Python-based ETL, dashboards, and model pipelines) to ensure results are traceable and verifiable.
+	•	Collaborating with credit risk and quantitative teams to confirm models meet intended business use and are implemented with appropriate controls.
+	•	Ensuring sensitive data was handled in accordance with information security requirements, with outputs validated prior to stakeholder delivery.
 
+Through these actions, I have contributed to both the accuracy and reliability of key risk models, while supporting KeyBank’s broader risk and compliance objectives.
 
 In the previous development phase, I collaborated with the new Liquidity Director to further test the qualitative models for IBD-IOE and IBD Commercial. I evaluated stability under varying FFR scenarios, implementing the testing entirely in Python to validate Excel-based model results. This not only improved confidence in the models but also added a robust validation layer to the process.
 
