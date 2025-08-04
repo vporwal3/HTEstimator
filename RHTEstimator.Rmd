@@ -1,3 +1,15 @@
+Contribute to the end-to-end redevelopment of deposit beta models for IBD Commercial, Public Commercial MMDA, and MMDA Select Promo/Exec products.
+
+Description:
+	•	Lead exploratory data analysis and evaluate segmentation strategies to improve model precision and business alignment.
+	•	Develop model specifications using ARX and AECM methodologies where applicable, and assist in evaluating qualitative approaches for low-data or atypical segments.
+	•	Perform backtesting, forecasting, and scenario testing to assess model robustness and business relevance under varying rate environments.
+	•	Collaborate with the Finance team to present results, gather feedback, and refine models based on business insights and use-case needs.
+	•	Assist in preparing comprehensive model documentation and submit models for Model Risk review; respond to questions and revision requests in coordination with the broader quant team.
+	•	Support the implementation process and help establish monitoring frameworks for ongoing model performance tracking and governance compliance.
+
+
+
 Support finalization, validation, and deployment of the Dynamic Credit Surveillance Tool (DST) for Middle Market and Small Business portfolios.
 
 Description:
