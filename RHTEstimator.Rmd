@@ -1,3 +1,5 @@
+
+du -h --max-depth=1 /home/jupyter/Deposit/gcs | sort -h
 # If this prints a line, it's a mount
 mount | grep '/home/jupyter/Deposit/gcs'
 
