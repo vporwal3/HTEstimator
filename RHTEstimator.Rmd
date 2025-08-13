@@ -1,3 +1,6 @@
+du -sh /home/jupyter/* 2>/dev/null | sort -h
+
+
 https://anaconda.org/conda-forge/x13arima-seats/files
 conda install -c conda-forge x13arima-seats
 
