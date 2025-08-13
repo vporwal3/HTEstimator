@@ -1,3 +1,10 @@
+# If this prints a line, it's a mount
+mount | grep '/home/jupyter/Deposit/gcs'
+
+# Show file type; "->" means symlink
+ls -ld /home/jupyter/Deposit/gcs
+
+
 du -sh /home/jupyter/* 2>/dev/null | sort -h
 
 
