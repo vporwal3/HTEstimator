@@ -1,3 +1,4 @@
+mount | grep '/home/jupyter/Deposit/gcs' || echo "Not mounted — safe to delete locally"
 rm -rf ~/Deposit/gcs/.Trash-1000/*
 du -h --max-depth=1 /home/jupyter/Deposit/gcs | sort -h
 # If this prints a line, it's a mount
