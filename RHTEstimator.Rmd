@@ -1,3 +1,10 @@
+git checkout --theirs package/utils.py package/forecasting.py
+# or equivalently:
+# git restore --source=temp-branch -- package/utils.py package/forecasting.py
+
+git add package/utils.py package/forecasting.py
+git commit -m "Merge temp-branch, take theirs for conflicted files"
+
 # 1. Make sure you’re on your target local branch
 git checkout my-local-branch
 
