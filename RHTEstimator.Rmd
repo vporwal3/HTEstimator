@@ -1,3 +1,40 @@
+# pip install "autogen-core>=0.4" "autogen-agentchat>=0.4" "autogen-ext[openai]" google-auth
+
+from autogen_agentchat.agents import AssistantAgent
+from autogen_ext.models.openai import OpenAIChatCompletionClient
+from autogen_core.models import SystemMessage, UserMessage
+import google.auth
+import google.auth.transport.requests as greq
+
+PROJECT = "your-gcp-project"
+LOCATION = "us-central1"  # pick the region you deployed for Vertex AI OpenAI-compat
+
+# 1) Get an ADC bearer token
+scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+creds, _ = google.auth.default(scopes=scopes)
+creds.refresh(greq.Request())
+
+# 2) OpenAI-compatible client pointed at Vertex AI (no static API key)
+client = OpenAIChatCompletionClient(
+    model="google/gemini-2.0-flash-001",               # pick your Vertex AI Gemini model id
+    base_url=f"https://aiplatform.googleapis.com/v1/projects/{PROJECT}/locations/{LOCATION}/endpoints/openapi",
+    api_key=creds.token,                               # short-lived OAuth token from ADC
+    temperature=0.2,
+)
+
+# 3) Plug the model client into AgentChat’s AssistantAgent
+assistant = AssistantAgent(
+    name="gemini_assistant",
+    model_client=client,
+    system_message="You are a concise engineering assistant."
+)
+
+# 4) Chat
+messages = [UserMessage(content="Give me 3 bullet points on CDA vs step-down descents.", source="user")]
+response = await assistant.on_messages(messages)       # AgentChat uses message objects
+print(response.chat_message.content)
+
+
 git checkout --theirs package/utils.py package/forecasting.py
 # or equivalently:
 # git restore --source=temp-branch -- package/utils.py package/forecasting.py
