@@ -1,170 +1,148 @@
-# pip install "autogen-core>=0.4" "autogen-agentchat>=0.4" "autogen-ext[openai]" google-auth
+ Vertex AI Search vs Vector Search — Cost Comparison (Apples-to-Apples)
 
-from autogen_agentchat.agents import AssistantAgent
-from autogen_ext.models.openai import OpenAIChatCompletionClient
-from autogen_core.models import SystemMessage, UserMessage
-import google.auth
-import google.auth.transport.requests as greq
+This document compares **Vertex AI Search (Discovery Engine)** and **Vertex AI Vector Search** on a **common workload** to understand real pricing differences.
 
-PROJECT = "your-gcp-project"
-LOCATION = "us-central1"  # pick the region you deployed for Vertex AI OpenAI-compat
+---
 
-# 1) Get an ADC bearer token
-scopes = ["https://www.googleapis.com/auth/cloud-platform"]
-creds, _ = google.auth.default(scopes=scopes)
-creds.refresh(greq.Request())
+## Common Ground Assumptions
 
-# 2) OpenAI-compatible client pointed at Vertex AI (no static API key)
-client = OpenAIChatCompletionClient(
-    model="google/gemini-2.0-flash-001",               # pick your Vertex AI Gemini model id
-    base_url=f"https://aiplatform.googleapis.com/v1/projects/{PROJECT}/locations/{LOCATION}/endpoints/openapi",
-    api_key=creds.token,                               # short-lived OAuth token from ADC
-    temperature=0.2,
-)
+Same assumptions for both services:
 
-# 3) Plug the model client into AgentChat’s AssistantAgent
-assistant = AssistantAgent(
-    name="gemini_assistant",
-    model_client=client,
-    system_message="You are a concise engineering assistant."
-)
+- **Queries:** 10 million searches per year  
+  ≈ 0.32 QPS average, ~5–10 QPS peak
+- **Corpus size:** ~100 GB text data  
+  → ~20 million chunks / vectors
+- **Embedding dimension:** 256
+- **Region:** us-central1
+- **No advanced generative answers**
+- **Pure retrieval** (LLM calls handled separately)
 
-# 4) Chat
-messages = [UserMessage(content="Give me 3 bullet points on CDA vs step-down descents.", source="user")]
-response = await assistant.on_messages(messages)       # AgentChat uses message objects
-print(response.chat_message.content)
+---
 
+## 1. Vertex AI Search (Discovery Engine)
 
-git checkout --theirs package/utils.py package/forecasting.py
-# or equivalently:
-# git restore --source=temp-branch -- package/utils.py package/forecasting.py
+### A. Query Cost
+- Pricing: **$1.50 per 1,000 queries**
 
-git add package/utils.py package/forecasting.py
-git commit -m "Merge temp-branch, take theirs for conflicted files"
+```
+10,000,000 / 1,000 × $1.50
+= $15,000 / year
+```
 
-# 1. Make sure you’re on your target local branch
-git checkout my-local-branch
+---
 
-# 2. Fetch the remote branch 'base' into a temporary local branch
-git fetch origin base:temp-branch
+### B. Index Storage Cost
+- Pricing: **$5 per GB per month**
+- Free tier: **10 GB**
+- Billable storage: **90 GB**
 
-# 3. Merge the temporary branch into your current branch
-git merge temp-branch
+```
+90 GB × $5 × 12 months
+= $5,400 / year
+```
 
-# 4. (Optional) Delete the temporary branch once merged
-git branch -d temp-branch
+---
 
+### C. Total Vertex AI Search Cost
 
+```
+$15,000 (queries)
++ $5,400 (index storage)
+= $20,400 / year
+≈ $1,700 / month
+```
 
+**Includes:**
+- Hybrid keyword + semantic retrieval
+- Ranking and relevance tuning
+- Metadata filtering
+- Fully managed infrastructure (no VMs to manage)
 
-git stash push -m "Backup before merge"
-mount | grep '/home/jupyter/Deposit/gcs' || echo "Not mounted — safe to delete locally"
-rm -rf ~/Deposit/gcs/.Trash-1000/*
-du -h --max-depth=1 /home/jupyter/Deposit/gcs | sort -h
-# If this prints a line, it's a mount
-mount | grep '/home/jupyter/Deposit/gcs'
+---
 
-# Show file type; "->" means symlink
-ls -ld /home/jupyter/Deposit/gcs
+## 2. Vertex AI Vector Search
 
+Closest matching pricing example from official docs:
 
-du -sh /home/jupyter/* 2>/dev/null | sort -h
+- **20 million vectors**
+- **256 dimensions**
+- **~500 QPS capacity**
+- **Machine type:** e2-highmem-16
+- **Nodes:** 2
+- **Serving cost:** ~$1,477 / month
 
+> Note: Vector Search must be provisioned for **peak capacity**, not average QPS.
 
-https://anaconda.org/conda-forge/x13arima-seats/files
-conda install -c conda-forge x13arima-seats
+---
 
-Actions Relative to Risks and Control Goals
-In the first half of 2025, I ensured that all modeling, analysis, and automation work adhered to KeyBank’s model risk management and data governance standards. This included:
-	•	Maintaining clear, complete documentation for each project to support Model Risk review and future audit requirements.
-	•	Proactively addressing potential model risk concerns during development, such as validating data sources, testing for stability under multiple scenarios, and aligning segmentation or methodology changes with statistical evidence.
-	•	Building reproducible, transparent workflows (Python-based ETL, dashboards, and model pipelines) to ensure results are traceable and verifiable.
-	•	Collaborating with credit risk and quantitative teams to confirm models meet intended business use and are implemented with appropriate controls.
-	•	Ensuring sensitive data was handled in accordance with information security requirements, with outputs validated prior to stakeholder delivery.
+### A. Serving Cost
 
-Through these actions, I have contributed to both the accuracy and reliability of key risk models, while supporting KeyBank’s broader risk and compliance objectives.
+```
+$1,477 × 12
+= $17,724 / year
+```
 
-In the previous development phase, I collaborated with the new Liquidity Director to further test the qualitative models for IBD-IOE and IBD Commercial. I evaluated stability under varying FFR scenarios, implementing the testing entirely in Python to validate Excel-based model results. This not only improved confidence in the models but also added a robust validation layer to the process.
+---
 
-📌 Performance Evaluation Comment (Mid-Year 2025)
+### B. Index Build / Update Cost
 
-During the first half of 2025, I contributed
+- Pricing: **$3 per GiB per index update**
+- Assume: 100 GB index
+- Assume: 1 rebuild per month
 
+```
+100 GB × $3 × 12
+= $3,600 / year
+```
 
- meaningfully across multiple high-priority initiatives within Credit Risk and Quantitative Modeling, consistently demonstrating technical ownership, initiative, and cross-team collaboration. My work spanned end-to-end model development, statistical research, dashboarding, and automation efforts — all aligned with improving model quality, accelerating execution, and supporting business and regulatory objectives.
+---
 
-1. Dynamic Credit Surveillance Tool – Middle Market and Small Business
-I led the full development of the DST codebase, supporting early credit deterioration detection across four client segments. This included identifying optimal data sources (CRR, CAM, Review), engineering a panel dataset using optimized parallel ETL (cutting run time to ~15 minutes), and building a preprocessing pipeline leveraging a new Weight of Evidence (WOE) binning technique that uses optimization methods to determine bin thresholds — improving AUC, precision, and recall by 8–10%.
-I also integrated a novel MFA selection package that reduced model generation time from several hours to minutes. Finalized models achieved AUC >0.75 (vs. ~0.65 in legacy versions), offering significant improvements in predictive power. I also created a custom backtesting framework for panel data and led presentations to the credit risk team.
-Business impact: The tool supports focused client reviews, allowing the credit risk team to prioritize the riskiest 100–200 clients across MM/SB portfolios.
+### C. Total Vector Search Cost
 
-2. Deposit Beta Redevelopment
-I played a lead role in the redevelopment of beta models for three key products: IBD Commercial, Public Commercial MMDA, and MMDA Select Promo/Exec. I developed an interactive dashboard (Python + Plotly Dash) capable of handling 5M+ rows, enabling dynamic segmentation analysis and accelerating decision-making on grouping criteria.
-Model improvements led to ~15% reductions in backtesting errors (MAE, RMSE) for Public Commercial MMDA, without compromising stability under different FFR scenarios.
-Business impact: These models feed directly into NII and EVE calculations, supporting Treasury’s interest rate risk management framework.
+```
+$17,724 (serving)
++ $3,600 (index builds)
+= $21,324 / year
+≈ $1,775 / month
+```
 
-3. PPNR Modeling Support
-I provided flexible support across several income line items, including initial modeling for the Credit Card Income series and normalization strategies for Investment Banking & Debt Placement sub-items. I also contributed to internal research on model testing standards.
-Though not a primary developer, I made consistent contributions and frequently stepped in when help was needed, managing priorities across projects.
+---
 
-4. C&I Loss Forecasting – 2025 CASTA
-To support an understaffed C&I modeling team, I developed a robust segmentation framework using rolling-window statistical testing (Chi-squared, Mann-Whitney, PCA), helping justify a shift from business group-based to commitment-based segmentation.
-I also built a high-performance EDA dashboard (Plotly Dash) for interactive exploration of millions of rows, enabling the team to visualize and evaluate model drivers in real time.
-Business impact: My contributions helped accelerate the model cycle for a CASTA-critical loss forecasting submission.
+## Side-by-Side Summary
 
-5. Due Diligence Report QA Automation
-In collaboration with the KTO Automation team, I helped build two parallel solutions: (a) a statistical scoring engine and (b) a GenAI-based pipeline to flag and summarize risky elements in diligence reports.
-Business impact: This modernized a legacy random-review process, improving coverage of high-risk reports while saving manual review time.
+| Service | Annual Cost | Monthly Cost |
+|------|-----------|-------------|
+| Vertex AI Search | ~$20,400 | ~$1,700 |
+| Vector Search | ~$21,324 | ~$1,775 |
 
-6. Transactions Data Extraction & Dashboarding
+---
 
+## Key Takeaways
 
+- **Low QPS (<10–20 QPS):** Vertex AI Search is cheaper or equal
+- **Medium QPS (50–100 QPS):** Vector Search becomes cheaper
+- **High QPS (100+ QPS):** Vector Search is dramatically cheaper
 
+---
 
-I led the ETL pipeline for extracting transaction data and built a Looker Studio dashboard to visualize trends and patterns in near real time.
-Business impact: This foundational step supports integration of transactional signals into future credit risk models.
+## Mental Model
 
-7. CRE Performance Database Prototype
-I collaborated with our group head and senior executives to build a prototype structure for consolidating CRE loan performance data, currently siloed in Excel.
-Business impact: This will support long-term efforts around monitoring, early warning systems, and credit risk modeling for CRE portfolios.
+- **Vertex AI Search**  
+  SaaS-style pricing: pay per query + indexed data
 
-⸻
+- **Vector Search**  
+  Infrastructure-style pricing: pay for always-on capacity
 
-🔚 Closing Summary
+---
 
-Across these efforts, I have taken initiative, delivered technically sound work, and continuously looked for ways to improve team efficiency — whether by introducing new packages, building tools to accelerate analysis, or stepping in to support other teams. I’ve grown in my ability to work independently while maintaining clear documentation and communication, and I look forward to continuing to contribute to model quality, automation, and strategic impact in the second half of 2025.
+## Recommendation
 
-Provide flexible support to the PPNR modeling team in development, documentation, and governance activities for key income and expense line items.
+- Choose **Vertex AI Search** for:
+  - Low traffic
+  - Rich metadata filtering
+  - Search-style applications
 
-Description:
-	•	Contribute to modeling efforts across multiple PPNR components by assisting with data preparation, exploratory analysis, and model estimation as needed.
-
-Contribute to the end-to-end redevelopment of deposit beta models for IBD Commercial, Public Commercial MMDA, and MMDA Select Promo/Exec products.
-
-Description:
-	•	Lead exploratory data analysis and evaluate segmentation strategies to improve model precision and business alignment.
-	•	Develop model specifications using ARX and AECM methodologies where applicable, and assist in evaluating qualitative approaches for low-data or atypical segments.
-	•	Perform backtesting, forecasting, and scenario testing to assess model robustness and business relevance under varying rate environments.
-	•	Collaborate with the Finance team to present results, gather feedback, and refine models based on business insights and use-case needs.
-	•	Assist in preparing comprehensive model documentation and submit models for Model Risk review; respond to questions and revision requests in coordination with the broader quant team.
-	•	Support the implementation process and help establish monitoring frameworks for ongoing model performance tracking and governance compliance.
-
-
-
-Support finalization, validation, and deployment of the Dynamic Credit Surveillance Tool (DST) for Middle Market and Small Business portfolios.
-
-Description:
-	•	Conduct rigorous testing and performance validation of the DST model to ensure it meets business objectives and accurately flags credit deterioration.
-	•	Collaborate with the credit risk team to gather feedback, confirm alignment with user expectations, and ensure practical usability of the tool.
-	•	Maintain clear and comprehensive model documentation, addressing all Model Risk Governance requirements proactively and thoroughly.
-	•	Respond to model risk review questions in a timely and detailed manner to support successful model approval.
-	•	Assist in evaluating and implementing deployment strategies that are most efficient and convenient for the credit risk team’s workflow and ongoing monitoring.
-
-
-
-
-Goal:
-Contribute proactively to team objectives through reliable execution, knowledge sharing, and collaboration across quant teams.
-
-Description:
-Take ownership of assigned modeling and analytical tasks while maintaining clear and timely communication with team members. Collaborate with peers across quantitative teams to align on methodology, troubleshoot issues, and share technical knowledge. Maintain thorough documentation of work and contribute to a team culture centered on accountability, continuous learning, and mutual support.
+- Choose **Vector Search** for:
+  - High-QPS RAG
+  - Embedding-heavy retrieval
+  - Hybrid dense + sparse search
