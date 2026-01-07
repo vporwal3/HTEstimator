@@ -1,3 +1,11 @@
+
+	•	Vertex AI Search
+Usage-based pricing (per query + indexed data); cost scales linearly with query volume and enabled features, but no always-on infrastructure cost.
+	•	Vertex AI RAG Engine
+Costs driven by underlying retrieval backend (Vertex AI Search or Vector Search) plus LLM usage; limited ability to independently optimize retrieval cost.
+	•	Vertex AI Vector Search
+Infrastructure-based pricing (always-on index serving + storage); higher fixed cost but significantly lower marginal cost at moderate to high query volumes
+
 Vertex AI Search
 Limited control over chunking; document parsing and chunking are largely managed by the service with coarse configuration options, not fully customizable per strategy.
 	•	Vertex AI Vector Search
