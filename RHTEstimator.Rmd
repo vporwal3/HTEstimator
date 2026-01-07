@@ -1,3 +1,14 @@
+Vertex AI Search
+Limited control over chunking; document parsing and chunking are largely managed by the service with coarse configuration options, not fully customizable per strategy.
+	•	Vertex AI Vector Search
+Full control over chunking; users define and manage all chunking strategies (fixed, document-aware, LLM-based, or custom) prior to embedding and indexing.
+	•	Vertex AI RAG Engine
+Moderate control over chunking; supports configurable chunk sizes and overlap during ingestion, but advanced or custom chunking strategies require pre-processing outside the engine.
+
+Supports “bring your own chunks” (preview, allowlisted), allowing externally pre-chunked documents to be indexed;
+
+
+
 	•	Vertex AI Search
 Supports rich, expressive metadata filtering using query-time filter expressions across all indexed filterable fields (AND/OR/NOT, ranges, field comparisons).
 	•	Vertex AI Vector Search
