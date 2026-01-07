@@ -1,3 +1,12 @@
+	•	Vertex AI Search
+Supports managed document ingestion, replacement, and deletion within a datastore; document updates are applied via re-indexing, with no native document-level versioning.
+	•	Vertex AI RAG Engine
+Supports document ingestion and deletion within a corpus; does not support in-place updates or versioning—documents are immutable and must be deleted and re-ingested.
+	•	Vertex AI Vector Search
+Supports explicit ingestion, in-place updates (upserts), deletion, and user-defined versioning through direct datapoint management
+
+
+
 
 	•	Vertex AI Search
 Usage-based pricing (per query + indexed data); cost scales linearly with query volume and enabled features, but no always-on infrastructure cost.
