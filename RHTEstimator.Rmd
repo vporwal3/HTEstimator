@@ -1,3 +1,12 @@
+	•	Vertex AI Search
+Supports rich, expressive metadata filtering using query-time filter expressions across all indexed filterable fields (AND/OR/NOT, ranges, field comparisons).
+	•	Vertex AI Vector Search
+Supports structured, exact-match metadata filtering via pre-indexed restrict namespaces and numeric constraints; no free-form query expressions.
+	•	Vertex AI RAG Engine
+Limited metadata filtering; does not expose Vertex AI Search filter expressions—filtering must be approximated via corpus partitioning or file-level selection.
+
+
+
  Vertex AI Search vs Vector Search — Cost Comparison (Apples-to-Apples)
 
 This document compares **Vertex AI Search (Discovery Engine)** and **Vertex AI Vector Search** on a **common workload** to understand real pricing differences.
