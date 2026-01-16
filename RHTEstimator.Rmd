@@ -1,4 +1,22 @@
-	•	Vertex AI Search
+	
+filter=[
+        Namespace("source", ["kb"], []),            # allow_list=["kb"]
+        Namespace("lang", ["en"], []),              # allow_list=["en"]
+        # Namespace("doctype", [], ["invoice"])     # deny_list=["invoice"]
+    ],
+
+    # numeric restricts
+    numeric_filter=[
+        NumericNamespace(name="year", value_int=2023, op="GREATER_EQUAL"),
+        NumericNamespace(name="chunk_len", value_int=1200, op="LESS_EQUAL"),
+    ],
+)
+
+•	
+
+
+
+Vertex AI Search
 Supports managed document ingestion, replacement, and deletion within a datastore; document updates are applied via re-indexing, with no native document-level versioning.
 	•	Vertex AI RAG Engine
 Supports document ingestion and deletion within a corpus; does not support in-place updates or versioning—documents are immutable and must be deleted and re-ingested.
@@ -29,7 +47,9 @@ Supports “bring your own chunks” (preview, allowlisted), allowing externally
 	•	Vertex AI Search
 Supports rich, expressive metadata filtering using query-time filter expressions across all indexed filterable fields (AND/OR/NOT, ranges, field comparisons).
 	•	Vertex AI Vector Search
-Supports structured, exact-match metadata filtering via pre-indexed restrict namespaces and numeric constraints; no free-form query expressions.
+Supports structured, exact-match metadata
+
+ filtering via pre-indexed restrict namespaces and numeric constraints; no free-form query expressions.
 	•	Vertex AI RAG Engine
 Limited metadata filtering; does not expose Vertex AI Search filter expressions—filtering must be approximated via corpus partitioning or file-level selection.
 
