@@ -1,3 +1,35 @@
+
+
+import re
+from typing import List
+
+def make_tokenizer(pattern: str):
+    rx = re.compile(pattern)
+
+    def _tok(text: str) -> List[str]:
+        if not text:
+            return []
+
+        base = [t.lower() for t in rx.findall(text)]
+        out: List[str] = []
+
+        for tok in base:
+            out.append(tok)  # keep full token
+
+            # also add split parts for matching natural queries
+            for sep in ("-", "_", "."):
+                if sep in tok:
+                    parts = [p for p in tok.split(sep) if p]
+                    out.extend(parts)
+
+        # optional: drop 1-char tokens (usually noise)
+        out = [t for t in out if len(t) > 1]
+        return out
+
+    return _tok
+
+TOKEN_PATTERN = r"[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)*|[A-Za-z0-9_]+(?:-[A-Za-z0-9_]+)+|[A-Za-z0-9_]+"
+tokenize = make_tokenizer(TOKEN_PATTERN)
 	
 filter=[
         Namespace("source", ["kb"], []),            # allow_list=["kb"]
