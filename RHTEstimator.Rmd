@@ -1,4 +1,49 @@
 
+import re
+from typing import List
+
+_EXT_RE = re.compile(r".+\.(png|jpg|jpeg|gif|svg|pdf|txt|rst|md|html|css|js|json|yaml|yml|csv|parquet|ipynb)$")
+_NUM_RE = re.compile(r"^\d+$")
+_VER_RE = re.compile(r"^\d+(\.\d+)+$")          # 1.8.0, 0.955, 3.10.19
+_PATHISH_RE = re.compile(r"[\\/]|::")           # / \ or python :: style
+_BAD_PUNCT_ONLY_RE = re.compile(r"^[\W_]+$")    # only punctuation/underscores
+
+def make_tokenizer(pattern: str):
+    rx = re.compile(pattern)
+
+    def _tok(text: str) -> List[str]:
+        if not text:
+            return []
+
+        base = [t.lower() for t in rx.findall(text)]
+        out: List[str] = []
+
+        for tok in base:
+            out.append(tok)
+            for sep in ("-", "_", "."):
+                if sep in tok:
+                    out.extend([p for p in tok.split(sep) if p])
+
+        filtered: List[str] = []
+        for t in out:
+            if not t:
+                continue
+            if len(t) <= 1:
+                continue
+            if _BAD_PUNCT_ONLY_RE.match(t):
+                continue
+            if _PATHISH_RE.search(t):
+                continue
+            if _EXT_RE.match(t):
+                continue
+            if _NUM_RE.match(t) or _VER_RE.match(t):
+                continue
+            filtered.append(t)
+
+        return filtered
+
+    return _tok
+
 
 import re
 from typing import List
